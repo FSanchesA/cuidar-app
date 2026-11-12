@@ -4,5 +4,11 @@
   "name": "cuidar-api",
   "main": "worker.js",
   "compatibility_date": "2026-11-11",
-  "workers_dev": true
+  "workers_dev": true,
+  "keep_vars": true,
+  "secrets": {
+    "required": [
+      "BRIDGE_SECRET"
+    ]
+  }
 }
