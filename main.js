@@ -11,7 +11,7 @@
 */
 
 const CONFIG = {
-  API_URL: "",
+  API_URL: "https://cuidar-api.fabricio-cbq.workers.dev/api",
   TIMEZONE: "America/Sao_Paulo",
   REFRESH_MS: 30000
 };
