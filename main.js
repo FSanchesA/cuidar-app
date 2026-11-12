@@ -569,7 +569,9 @@ function bindForms() {
     e.preventDefault();
 
     const type = form.dataset.meal;
-    const value = form.elements.value.value.trim();
+    const value = form.querySelector(
+  'textarea[name="value"]'
+).value.trim();
 
     await saveRecord({
       category: "alimentacao",
