@@ -1,1099 +1,957 @@
 
-"use strict";
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport"
+ content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#174C3C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cuidar">
+<meta name="apple-mobile-web-app-status-bar-style"
+ content="default">
+<meta name="description"
+ content="Acompanhamento diario de Georges e Ilma.">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="icon" href="./apple-touch-icon.png">
+<title>Cuidar | Acompanhamento Diário</title>
 
-/*
- CUIDAR - MAIN.JS
- Georges e Ilma | Frontend GitHub Pages
-
- ATENCAO:
- Preencher API_URL somente apos configurar o Worker.
- Nao inserir senhas nem BRIDGE_SECRET aqui.
-*/
-
-const CONFIG = {
-  API_URL: "",
-  TIMEZONE: "America/Sao_Paulo",
-  REFRESH_MS: 30000
-};
-
-const $ = id => document.getElementById(id);
-
-const PATIENTS = {
-  GEORGES: "Georges",
-  ILMA: "Ilma"
-};
-
-const MEALS = {
-  cafe: "Café da manhã",
-  almoco: "Almoço",
-  jantar: "Jantar",
-  lanche: "Lanche"
-};
-
-const TYPES = {
-  ...MEALS,
-  pressao: "Pressão arterial",
-  glicemia: "Glicemia",
-  temperatura: "Temperatura",
-  banho: "Banho",
-  higiene_bucal: "Higiene bucal",
-  urina: "Urina",
-  evacuacao: "Evacuação"
-};
-
-const CATEGORIES = {
-  alimentacao: "Alimentação",
-  agua: "Água",
-  medicacao: "Medicação",
-  sinais_vitais: "Sinais vitais",
-  higiene: "Higiene e eliminações",
-  consulta: "Consulta",
-  exame: "Exame",
-  ocorrencia: "Ocorrência"
-};
-
-const state = {
-  patient: "GEORGES",
-  screen: "care",
-  careDate: "",
-  dashDate: "",
-  careData: null,
-  dashData: null,
-  familyToken: null,
-  dates: [],
-  busy: false,
-  lastDay: ""
-};
-
-/* ===== UTILITARIOS ===== */
-
-function esc(v) {
-  return String(v ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+<style>
+:root {
+  --primary:#174C3C;
+  --primary2:#28735C;
+  --soft:#E7F3ED;
+  --bg:#F5F8F6;
+  --border:#DBE8E1;
+  --text:#243C32;
+  --muted:#74847C;
+  --white:#FFFFFF;
+  --danger:#B73F48;
+  --shadow:0 6px 22px rgba(25,65,45,.045);
 }
 
-function today() {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: CONFIG.TIMEZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  }).formatToParts(new Date());
-
-  const part = key =>
-    parts.find(p => p.type === key).value;
-
-  return `${part("year")}-${part("month")}-${part("day")}`;
+body.ilma {
+  --primary:#A34E73;
+  --primary2:#C87797;
+  --soft:#FCE7F0;
+  --bg:#FFF3F7;
+  --border:#F2D6E2;
+  --text:#62384A;
+  --muted:#9E7C8A;
+  --shadow:0 6px 22px rgba(130,60,90,.055);
 }
 
-function dateLabel(value) {
-  if (!value) return "";
-  const [y, m, d] = value.split("-");
-  return `${d}/${m}/${y}`;
+* { box-sizing:border-box; }
+
+body {
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,
+    "Segoe UI",Arial,sans-serif;
+  font-size:15px;
+  transition:background .2s;
 }
 
-function timeLabel(value) {
-  return value ? String(value).slice(11, 16) : "";
+button,input,textarea,select { font:inherit; }
+button { cursor:pointer; }
+button:disabled { opacity:.55;cursor:not-allowed; }
+
+.app {
+  max-width:850px;
+  margin:auto;
+  min-height:100vh;
+  padding-bottom:calc(30px + env(safe-area-inset-bottom));
 }
 
-function dateTime(value) {
-  if (!value) return "";
-  return dateLabel(String(value).slice(0, 10)) +
-    " às " + timeLabel(value);
+header {
+  background:var(--white);
+  padding:calc(20px + env(safe-area-inset-top)) 16px 17px;
+  border-bottom:1px solid var(--border);
 }
 
-function fullDate(value) {
-  if (!value) return "";
-  const [y, m, d] = value.split("-").map(Number);
-  const date = new Date(Date.UTC(y, m - 1, d, 12));
-
-  return new Intl.DateTimeFormat("pt-BR", {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC"
-  }).format(date);
+.brand {
+  display:flex;
+  align-items:center;
+  gap:11px;
 }
 
-function notify(message, error = false) {
-  const node = $("toast");
-  node.textContent = message;
-  node.classList.toggle("error", error);
-  node.hidden = false;
-
-  clearTimeout(notify.timer);
-  notify.timer = setTimeout(() => {
-    node.hidden = true;
-  }, 3500);
+.brand-icon {
+  width:47px;
+  height:47px;
+  flex-shrink:0;
+  display:grid;
+  place-items:center;
+  border-radius:15px;
+  background:var(--primary);
+  color:white;
+  font-size:25px;
 }
 
-function setBusy(value) {
-  state.busy = value;
-
-  document.querySelectorAll("button").forEach(button => {
-    if (
-      button.closest("form") ||
-      button.classList.contains("delete") ||
-      button.closest(".patient-nav")
-    ) {
-      button.disabled = value;
-    }
-  });
+.brand h1 {
+  font-size:25px;
+  letter-spacing:-.7px;
+  color:var(--primary);
+  margin:0;
 }
 
-function handleError(error) {
-  const message = error?.message || "Erro inesperado.";
-  notify(message, true);
-
-  if (
-    state.screen === "dash" &&
-    /sess[aã]o expirada|insira sua senha/i.test(message)
-  ) {
-    leaveDashboard();
-    openLogin();
-  }
+.brand p {
+  color:var(--muted);
+  font-size:12px;
+  margin:3px 0 0;
 }
 
-async function api(action, payload = {}) {
-  if (!CONFIG.API_URL) {
-    throw Error(
-      "A conexão com o Google Sheets ainda não foi configurada."
-    );
-  }
-
-  const response = await fetch(CONFIG.API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    cache: "no-store",
-    body: JSON.stringify({ action, payload })
-  });
-
-  let result;
-
-  try {
-    result = await response.json();
-  } catch {
-    throw Error("Resposta inválida do servidor.");
-  }
-
-  if (!response.ok || !result.ok) {
-    throw Error(
-      result.error || "Não foi possível concluir a operação."
-    );
-  }
-
-  return result;
+.nav,.patient-nav {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:7px;
+  border-radius:14px;
+  padding:5px;
 }
 
-function empty(message = "Nenhum registro neste dia.") {
-  return `<div class="empty">${esc(message)}</div>`;
+.nav {
+  background:var(--soft);
+  margin-top:19px;
 }
 
-function filterRecords(category, records) {
-  return records
-    .filter(r => r.category === category)
-    .sort((a, b) =>
-      String(b.createdAt).localeCompare(String(a.createdAt))
-    );
+.nav button,.patient-nav button {
+  border:0;
+  background:transparent;
+  border-radius:11px;
+  padding:13px 6px;
+  font-weight:750;
+  color:var(--muted);
 }
 
-function availableDates() {
-  const dates = new Set(state.dates);
-  const current = today();
-
-  const [y, m, d] = current.split("-").map(Number);
-  const base = new Date(Date.UTC(y, m - 1, d, 12));
-
-  for (let i = 0; i < 60; i++) {
-    const date = new Date(base);
-    date.setUTCDate(base.getUTCDate() - i);
-    dates.add(date.toISOString().slice(0, 10));
-  }
-
-  dates.add(current);
-
-  return [...dates]
-    .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d))
-    .filter(d => d <= current)
-    .sort().reverse();
+.nav button.active,.patient-nav button.active {
+  background:var(--primary);
+  color:white;
 }
 
-function populateDate(id, selected) {
-  const el = $(id);
-  const dates = availableDates();
-
-  if (selected && !dates.includes(selected)) {
-    dates.push(selected);
-    dates.sort().reverse();
-  }
-
-  el.replaceChildren();
-
-  dates.forEach(date => {
-    const opt = document.createElement("option");
-    opt.value = date;
-    opt.textContent = date === today()
-      ? `Hoje - ${dateLabel(date)}`
-      : dateLabel(date);
-    el.appendChild(opt);
-  });
-
-  el.value = selected;
+.patient-nav {
+  margin-top:10px;
+  background:#F0F0F0;
 }
 
-function updateControls() {
-  populateDate("care-date", state.careDate);
-  populateDate("dash-date", state.dashDate);
-
-  $("care-tag").textContent =
-    state.careDate === today() ? "Hoje" : "Histórico";
+.patient-nav button:first-child:not(.active) {
+  color:#174C3C;
 }
 
-/* ===== SELECAO DE IDOSO ===== */
-
-function applyPatient() {
-  document.body.classList.toggle(
-    "ilma", state.patient === "ILMA"
-  );
-  document.body.classList.toggle(
-    "georges", state.patient === "GEORGES"
-  );
-
-  $("patient-georges").classList.toggle(
-    "active", state.patient === "GEORGES"
-  );
-  $("patient-ilma").classList.toggle(
-    "active", state.patient === "ILMA"
-  );
-
-  const name = PATIENTS[state.patient];
-
-  $("care-title").textContent = `Cuidados de ${name}`;
-  $("dash-title").textContent = `Dashboard de ${name}`;
-  document.title = `Cuidar | ${name}`;
+.patient-nav button:last-child:not(.active) {
+  color:#A34E73;
 }
 
-async function selectPatient(patient) {
-  if (state.busy || state.patient === patient) return;
+main { padding:17px 14px; }
 
-  state.patient = patient;
-  state.careData = null;
-  state.dashData = null;
-  state.dates = [];
-
-  applyPatient();
-  updateControls();
-
-  // Mostra imediatamente formularios sem registros.
-  renderCare();
-
-  if (state.screen === "dash") {
-    renderDashboard();
-    await loadDashboard();
-  } else {
-    await loadCare();
-  }
+h2 {
+  font-size:20px;
+  color:var(--primary);
+  margin:0;
 }
 
-/* ===== EXIBICAO DOS REGISTROS ===== */
+h3 {
+  font-size:16px;
+  color:var(--primary);
+  margin:0;
+}
 
-function recordHTML(record) {
-  const name = TYPES[record.type] ||
-    CATEGORIES[record.category] || "Registro";
+.subtitle {
+  font-size:12px;
+  color:var(--muted);
+  line-height:1.5;
+  margin:5px 0 0;
+}
 
-  return `
-    <div class="record">
-      <div class="record-content">
-        <strong>${esc(name)}</strong>
-        <p>${esc(record.value)}
-          ${record.unit ? esc(record.unit) : ""}
-        </p>
-        ${record.notes ? `<p>${esc(record.notes)}</p>` : ""}
-        <div class="small">
-          Registrado em ${esc(dateTime(record.createdAt))}
-        </div>
+.heading {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:14px;
+}
+
+.pill {
+  background:var(--soft);
+  color:var(--primary);
+  padding:7px 11px;
+  border-radius:25px;
+  font-weight:750;
+  font-size:12px;
+}
+
+.datebar {
+  display:flex;
+  gap:9px;
+  margin-bottom:16px;
+}
+
+.datebar select { flex:1;min-width:0; }
+
+.btn-today {
+  border:1px solid var(--primary);
+  color:var(--primary);
+  background:white;
+  border-radius:12px;
+  padding:10px 17px;
+  font-weight:750;
+}
+
+.card {
+  background:white;
+  border:1px solid var(--border);
+  border-radius:18px;
+  padding:17px;
+  margin-bottom:13px;
+  box-shadow:var(--shadow);
+}
+
+.card-head {
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:center;
+  margin-bottom:15px;
+}
+
+.card-head p {
+  color:var(--muted);
+  font-size:12px;
+  margin:5px 0 0;
+}
+
+label {
+  display:block;
+  font-size:12px;
+  color:var(--text);
+  font-weight:750;
+  margin:0 0 7px;
+}
+
+input,select,textarea {
+  display:block;
+  width:100%;
+  min-height:46px;
+  border-radius:11px;
+  background:#FCFDFC;
+  border:1px solid var(--border);
+  outline:none;
+  padding:11px 12px;
+  color:var(--text);
+  font-size:16px;
+}
+
+textarea {
+  resize:vertical;
+  min-height:77px;
+}
+
+input:focus,select:focus,textarea:focus {
+  border-color:var(--primary2);
+  box-shadow:0 0 0 3px var(--soft);
+}
+
+.form-grid {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+}
+
+.actions {
+  display:flex;
+  align-items:center;
+  gap:9px;
+  margin-top:12px;
+  flex-wrap:wrap;
+}
+
+.btn-primary {
+  background:var(--primary);
+  color:white;
+  border:0;
+  padding:12px 16px;
+  border-radius:11px;
+  font-weight:750;
+  min-height:44px;
+}
+
+.btn-secondary {
+  border:1px solid var(--border);
+  background:white;
+  color:var(--primary);
+  padding:11px 14px;
+  border-radius:11px;
+  font-weight:750;
+}
+
+.meal {
+  border:1px solid var(--border);
+  border-radius:15px;
+  padding:14px;
+  margin-bottom:12px;
+  background:#FFFFFF;
+}
+
+.meal:last-child { margin-bottom:0; }
+
+.meal-title {
+  font-size:14px;
+  color:var(--primary);
+  font-weight:800;
+  margin:0 0 11px;
+}
+
+.meal-done {
+  background:var(--soft);
+  border-radius:11px;
+  padding:13px;
+}
+
+.meal-done .done-title {
+  font-size:13px;
+  color:var(--primary);
+  font-weight:800;
+}
+
+.meal-done p {
+  font-size:13px;
+  margin:8px 0;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+}
+
+.small {
+  font-size:11px;
+  color:var(--muted);
+  margin-top:5px;
+  line-height:1.5;
+}
+
+.record {
+  display:flex;
+  gap:10px;
+  align-items:flex-start;
+  justify-content:space-between;
+  padding:12px 0;
+  border-bottom:1px solid var(--border);
+}
+
+.record:last-child { border-bottom:0; }
+
+.record-content {
+  min-width:0;
+  flex:1;
+  overflow-wrap:anywhere;
+}
+
+.record-content strong {
+  display:block;
+  font-size:13px;
+  margin-bottom:4px;
+}
+
+.record-content p {
+  font-size:13px;
+  line-height:1.5;
+  white-space:pre-wrap;
+  margin:4px 0;
+}
+
+.delete {
+  flex-shrink:0;
+  background:#FFF0F0;
+  color:#B73F48;
+  border:0;
+  width:35px;
+  height:35px;
+  border-radius:10px;
+  font-size:21px;
+  font-weight:700;
+}
+
+.empty {
+  color:var(--muted);
+  font-size:12px;
+  padding:10px 0;
+}
+
+.section-label {
+  font-size:12px;
+  color:var(--primary);
+  font-weight:800;
+  margin:16px 0 7px;
+}
+
+.water-total {
+  font-size:34px;
+  font-weight:800;
+  color:var(--primary);
+  margin:4px 0 15px;
+}
+
+.water-total span {
+  font-size:13px;
+  color:var(--muted);
+  font-weight:400;
+}
+
+.banner {
+  background:var(--soft);
+  border-radius:15px;
+  padding:14px;
+  color:var(--primary);
+  margin-bottom:14px;
+}
+
+.banner strong { font-size:15px; }
+.banner p { font-size:12px;margin:5px 0 0; }
+
+.metrics {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  margin-bottom:13px;
+}
+
+.metric {
+  background:white;
+  border:1px solid var(--border);
+  padding:15px;
+  border-radius:16px;
+}
+
+.metric-label {
+  color:var(--muted);
+  font-size:12px;
+  margin-bottom:10px;
+}
+
+.metric-value {
+  font-size:27px;
+  font-weight:850;
+  color:var(--primary);
+}
+
+.metric-unit {
+  font-size:11px;
+  color:var(--muted);
+  margin-top:5px;
+}
+
+.progress {
+  background:var(--soft);
+  height:7px;
+  border-radius:10px;
+  margin-top:10px;
+  overflow:hidden;
+}
+
+.progress div {
+  background:var(--primary2);
+  height:100%;
+  width:0;
+}
+
+.dash-list {
+  display:grid;
+  gap:9px;
+  margin-top:13px;
+}
+
+.dash-item {
+  padding:12px;
+  border-radius:12px;
+  background:var(--soft);
+}
+
+.dash-item strong {
+  display:block;
+  font-size:13px;
+  margin-bottom:5px;
+}
+
+.dash-item p {
+  font-size:13px;
+  margin:0 0 5px;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+}
+
+.timeline {
+  border-left:2px solid var(--border);
+  padding:0 0 17px 14px;
+  margin:13px 0 0 6px;
+  position:relative;
+}
+
+.timeline:before {
+  content:"";
+  width:9px;
+  height:9px;
+  background:var(--primary2);
+  border-radius:50%;
+  position:absolute;
+  left:-5.5px;
+  top:4px;
+}
+
+.timeline strong { font-size:13px; }
+
+.timeline p {
+  font-size:13px;
+  margin:5px 0;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+}
+
+.notice {
+  background:#FFF6E5;
+  color:#775B2F;
+  border:1px solid #EEDCB2;
+  border-radius:12px;
+  padding:12px;
+  font-size:12px;
+  line-height:1.5;
+  margin-bottom:14px;
+}
+
+.modal-bg {
+  position:fixed;
+  inset:0;
+  background:rgba(12,29,22,.60);
+  z-index:100;
+  display:grid;
+  place-items:center;
+  padding:20px;
+}
+
+.modal {
+  background:white;
+  padding:24px;
+  border-radius:22px;
+  width:100%;
+  max-width:390px;
+  box-shadow:0 15px 55px #0003;
+}
+
+.modal h2 { margin-bottom:8px; }
+
+.modal p {
+  font-size:13px;
+  color:var(--muted);
+  line-height:1.5;
+}
+
+.toast {
+  position:fixed;
+  bottom:calc(20px + env(safe-area-inset-bottom));
+  left:50%;
+  transform:translateX(-50%);
+  background:var(--primary);
+  color:white;
+  padding:14px 19px;
+  width:min(92%,430px);
+  text-align:center;
+  z-index:200;
+  border-radius:13px;
+  box-shadow:0 8px 25px #0002;
+  font-size:13px;
+}
+
+.toast.error { background:var(--danger); }
+
+.footer {
+  text-align:center;
+  color:var(--muted);
+  font-size:11px;
+  padding:15px;
+}
+
+[hidden] { display:none!important; }
+
+@media(max-width:480px) {
+  main { padding:14px 11px; }
+  header { padding-left:12px;padding-right:12px; }
+  .card { padding:14px; }
+  .form-grid { grid-template-columns:1fr; }
+  .metric { padding:12px; }
+  .metric-value { font-size:24px; }
+}
+</style>
+</head>
+
+<body class="georges">
+<div class="app">
+  <header>
+    <div class="brand">
+      <div class="brand-icon">♥</div>
+      <div>
+        <h1>Cuidar</h1>
+        <p>Acompanhamento diário com carinho</p>
       </div>
-      <button type="button" class="delete"
-        data-delete="${esc(record.id)}"
-        title="Excluir registro"
-        aria-label="Excluir registro">×</button>
     </div>
-  `;
-}
 
-function renderList(targetId, records) {
-  $(targetId).innerHTML = records.length
-    ? records.map(recordHTML).join("")
-    : empty();
-}
+    <nav class="nav">
+      <button type="button" id="nav-care" class="active">
+        Lançamentos
+      </button>
+      <button type="button" id="nav-dash">Dashboard</button>
+    </nav>
 
-/* ===== ALIMENTACAO ===== */
+    <nav class="patient-nav" aria-label="Selecionar idoso">
+      <button type="button" id="patient-georges" class="active">
+        GEORGES
+      </button>
+      <button type="button" id="patient-ilma">ILMA</button>
+    </nav>
+  </header>
 
-function renderMeals() {
-  const records = filterRecords(
-    "alimentacao", state.careData?.records || []
-  );
+  <main>
+    <!-- LANCAMENTOS -->
+    <section id="screen-care">
+      <div class="heading">
+        <div>
+          <h2 id="care-title">Cuidados de Georges</h2>
+          <p class="subtitle">Registro diário dos cuidados.</p>
+        </div>
+        <span id="care-tag" class="pill">Hoje</span>
+      </div>
 
-  const mainMeals = ["cafe", "almoco", "jantar"];
+      <div class="datebar">
+        <button id="care-today" class="btn-today"
+          type="button">Hoje</button>
+        <select id="care-date" aria-label="Data dos cuidados"></select>
+      </div>
 
-  const mainCount = mainMeals.filter(type =>
-    records.some(r => r.type === type)
-  ).length;
+      <div id="connection-alert" class="notice" hidden>
+        Integração ainda não configurada. Os campos estão
+        disponíveis para visualização, mas os registros
+        não poderão ser salvos até a conexão com o Google Sheets.
+      </div>
 
-  $("meal-counter").textContent = `${mainCount} de 3`;
+      <!-- ALIMENTACAO -->
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h3>Alimentação</h3>
+            <p>Café da manhã, almoço, jantar e lanches.</p>
+          </div>
+          <span id="meal-counter" class="pill">0 de 3</span>
+        </div>
+        <div id="meals-container"></div>
+      </article>
 
-  const fixedHTML = mainMeals.map(type => {
-    const record = records.find(r => r.type === type);
-
-    if (record) {
-      return `
-        <div class="meal">
-          <div class="meal-title">${esc(MEALS[type])}</div>
-          <div class="meal-done">
-            <div class="done-title">✓ Refeição registrada</div>
-            <p>${esc(record.value)}</p>
-            <div class="small">
-              ${esc(dateTime(record.createdAt))}
-            </div>
-            <div class="actions">
-              <button type="button" class="delete"
-                data-delete="${esc(record.id)}"
-                aria-label="Excluir ${esc(MEALS[type])}"
-                title="Excluir para lançar novamente">×</button>
-              <span class="small">
-                Para lançar novamente, exclua o registro anterior.
-              </span>
-            </div>
+      <!-- AGUA -->
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h3>Água</h3>
+            <p>Registre cada quantidade ingerida.</p>
           </div>
         </div>
-      `;
-    }
+        <div class="water-total">
+          <span id="water-total">0</span>
+          <span>mL no dia</span>
+        </div>
+        <form id="water-form">
+          <div class="form-grid">
+            <div>
+              <label for="water-value">Quantidade (mL)</label>
+              <input id="water-value" type="text"
+                inputmode="numeric" maxlength="3"
+                pattern="[0-9]{1,3}"
+                placeholder="Ex.: 200" required>
+            </div>
+            <div class="actions">
+              <button class="btn-primary" type="submit">
+                + Adicionar água
+              </button>
+            </div>
+          </div>
+        </form>
+        <div id="water-records"></div>
+      </article>
 
-    return `
-      <div class="meal">
-        <form class="meal-form" data-meal="${type}">
-          <div class="meal-title">${esc(MEALS[type])}</div>
-          <label for="meal-${type}">
-            O que foi ingerido?
-          </label>
-          <textarea id="meal-${type}" name="value"
-            maxlength="1000" required
-            placeholder="Descreva os alimentos e bebidas"></textarea>
+      <!-- MEDICACAO -->
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h3>Medicações</h3>
+            <p>Registre cada administração.</p>
+          </div>
+        </div>
+        <form id="medication-form">
+          <label for="medication-value">Medicação administrada</label>
+          <textarea id="medication-value" required
+            maxlength="1000"
+            placeholder="Medicamento, dose e via de administração"></textarea>
           <div class="actions">
-            <button type="submit" class="btn-primary">
-              Registrar ${esc(MEALS[type])}
+            <button class="btn-primary" type="submit">
+              + Registrar medicação
             </button>
           </div>
         </form>
-      </div>
-    `;
-  }).join("");
-
-  const snacks = records.filter(r => r.type === "lanche");
-
-  const snacksHTML = `
-    <div class="meal">
-      <form class="meal-form" data-meal="lanche">
-        <div class="meal-title">Lanches</div>
-        <label for="meal-lanche">O que foi ingerido?</label>
-        <textarea id="meal-lanche" name="value"
-          maxlength="1000" required
-          placeholder="Ex.: Fruta, suco, biscoito..."></textarea>
-        <div class="actions">
-          <button type="submit" class="btn-primary">
-            + Registrar lanche
-          </button>
-        </div>
-        <p class="subtitle">
-          É possível registrar vários lanches durante o dia.
-        </p>
-      </form>
-
-      <div class="section-label">
-        Lanches registrados (${snacks.length})
-      </div>
-
-      ${snacks.length
-        ? snacks.map(recordHTML).join("")
-        : empty("Nenhum lanche registrado.")}
-    </div>
-  `;
-
-  $("meals-container").innerHTML = fixedHTML + snacksHTML;
-}
-
-/* ===== TELA DE LANCAMENTOS ===== */
-
-function renderCare() {
-  const records = state.careData?.records || [];
-  const summary = state.careData?.summary || {};
-
-  updateControls();
-  renderMeals();
-
-  $("water-total").textContent = summary.agua?.totalMl || 0;
-
-  const targets = [
-    ["water-records", "agua"],
-    ["medication-records", "medicacao"],
-    ["vital-records", "sinais_vitais"],
-    ["hygiene-records", "higiene"],
-    ["consultation-records", "consulta"],
-    ["exam-records", "exame"],
-    ["occurrence-records", "ocorrencia"]
-  ];
-
-  targets.forEach(([id, category]) => {
-    renderList(id, filterRecords(category, records));
-  });
-}
-
-async function loadCare(silent = false) {
-  if (state.busy) return;
-  if (!CONFIG.API_URL) return;
-
-  const patient = state.patient;
-  const date = state.careDate;
-
-  try {
-    const data = await api("init", {
-      patient,
-      date
-    });
-
-    if (
-      state.patient !== patient ||
-      state.careDate !== date
-    ) return;
-
-    state.careData = data;
-    state.dates = data.dates || [];
-    renderCare();
-  } catch (error) {
-    if (!silent) handleError(error);
-  }
-}
-
-/* ===== SALVAR E EXCLUIR ===== */
-
-async function saveRecord(fields) {
-  if (state.busy) return false;
-
-  const patient = state.patient;
-  const date = state.careDate;
-
-  setBusy(true);
-
-  try {
-    await api("save", {
-      ...fields,
-      patient,
-      date
-    });
-
-    notify("Registro salvo com sucesso.");
-    await refreshCare();
-    return true;
-  } catch (error) {
-    handleError(error);
-    return false;
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function refreshCare() {
-  const data = await api("init", {
-    patient: state.patient,
-    date: state.careDate
-  });
-
-  state.careData = data;
-  state.dates = data.dates || [];
-  renderCare();
-}
-
-async function deleteRecord(id) {
-  if (state.busy) return;
-
-  const yes = window.confirm(
-    "Tem certeza que deseja excluir este lançamento?"
-  );
-
-  if (!yes) return;
-
-  setBusy(true);
-
-  try {
-    await api("delete", {
-      id,
-      patient: state.patient
-    });
-
-    notify("Lançamento excluído.");
-    await refreshCare();
-
-  } catch (error) {
-    handleError(error);
-  } finally {
-    setBusy(false);
-  }
-}
-
-function updateVitalFields() {
-  const type = $("vital-type").value;
-
-  const options = {
-    pressao: ["Pressão arterial (mmHg)", "Ex.: 120/80"],
-    glicemia: ["Glicemia (mg/dL)", "Ex.: 105"],
-    temperatura: ["Temperatura (°C)", "Ex.: 36,5"]
-  };
-
-  $("vital-label").textContent = options[type][0];
-  $("vital-value").placeholder = options[type][1];
-  $("vital-value").value = "";
-  $("vital-value").inputMode =
-    type === "pressao" ? "text" : "decimal";
-}
-
-function bindForms() {
-  $("meals-container").addEventListener("submit", async e => {
-    const form = e.target.closest(".meal-form");
-    if (!form) return;
-
-    e.preventDefault();
-
-    const type = form.dataset.meal;
-    const value = form.elements.value.value.trim();
-
-    await saveRecord({
-      category: "alimentacao",
-      type,
-      value
-    });
-  });
-
-  $("water-value").addEventListener("input", e => {
-    e.target.value = e.target.value.replace(/\D/g, "").slice(0, 3);
-  });
-
-  $("water-form").addEventListener("submit", async e => {
-    e.preventDefault();
-
-    const value = $("water-value").value;
-
-    if (!/^\d{1,3}$/.test(value) || Number(value) === 0) {
-      notify("Informe uma quantidade entre 1 e 999 mL.", true);
-      return;
-    }
-
-    const ok = await saveRecord({
-      category: "agua",
-      type: "agua",
-      value
-    });
-
-    if (ok) e.target.reset();
-  });
-
-  $("medication-form").addEventListener("submit", async e => {
-    e.preventDefault();
-
-    const ok = await saveRecord({
-      category: "medicacao",
-      type: "medicacao",
-      value: $("medication-value").value.trim()
-    });
-
-    if (ok) e.target.reset();
-  });
-
-  $("vital-type").addEventListener("change", updateVitalFields);
-
-  $("vital-form").addEventListener("submit", async e => {
-    e.preventDefault();
-
-    const type = $("vital-type").value;
-    const value = $("vital-value").value.trim();
-
-    if (
-      type === "pressao" &&
-      !/^\d{2,3}\s*\/\s*\d{2,3}$/.test(value)
-    ) {
-      notify("Informe a pressão no formato 120/80.", true);
-      return;
-    }
-
-    const ok = await saveRecord({
-      category: "sinais_vitais",
-      type,
-      value
-    });
-
-    if (ok) updateVitalFields();
-  });
-
-  $("hygiene-form").addEventListener("submit", async e => {
-    e.preventDefault();
-
-    const ok = await saveRecord({
-      category: "higiene",
-      type: $("hygiene-type").value,
-      value: "Realizado",
-      notes: $("hygiene-note").value.trim()
-    });
-
-    if (ok) e.target.reset();
-  });
-
-  const forms = [
-    ["consultation-form", "consultation-value", "consulta"],
-    ["exam-form", "exam-value", "exame"],
-    ["occurrence-form", "occurrence-value", "ocorrencia"]
-  ];
-
-  forms.forEach(([formId, fieldId, category]) => {
-    $(formId).addEventListener("submit", async e => {
-      e.preventDefault();
-
-      const ok = await saveRecord({
-        category,
-        type: category,
-        value: $(fieldId).value.trim()
-      });
-
-      if (ok) e.target.reset();
-    });
-  });
-
-  $("screen-care").addEventListener("click", e => {
-    const button = e.target.closest("[data-delete]");
-    if (button) deleteRecord(button.dataset.delete);
-  });
-}
-
-/* ===== DASHBOARD E SENHA ===== */
-
-function openLogin() {
-  $("login-modal").hidden = false;
-  $("family-password").value = "";
-  $("family-password").focus();
-}
-
-function closeLogin() {
-  $("login-modal").hidden = true;
-  $("family-password").value = "";
-}
-
-async function loginFamily() {
-  if (state.busy) return;
-
-  setBusy(true);
-
-  try {
-    const result = await api("login", {
-      password: $("family-password").value
-    });
-
-    state.familyToken = result.token;
-    state.dashDate = state.careDate;
-
-    closeLogin();
-    showScreen("dash");
-    await loadDashboard();
-
-  } catch (error) {
-    handleError(error);
-  } finally {
-    setBusy(false);
-  }
-}
-
-function leaveDashboard() {
-  const token = state.familyToken;
-
-  state.familyToken = null;
-  state.dashData = null;
-
-  showScreen("care");
-
-  if (token) {
-    api("logout", { token }).catch(() => {});
-  }
-}
-
-async function loadDashboard(silent = false) {
-  if (!state.familyToken) {
-    openLogin();
-    return;
-  }
-
-  if (!CONFIG.API_URL) return;
-
-  const patient = state.patient;
-  const date = state.dashDate;
-  const token = state.familyToken;
-
-  try {
-    const data = await api("list", {
-      mode: "familia",
-      patient,
-      date,
-      token
-    });
-
-    if (
-      state.patient !== patient ||
-      state.dashDate !== date ||
-      state.familyToken !== token
-    ) return;
-
-    state.dashData = data;
-    state.dates = data.dates || [];
-    renderDashboard();
-  } catch (error) {
-    if (!silent) handleError(error);
-  }
-}
-
-function dashboardItems(target, records) {
-  if (!records.length) {
-    $(target).innerHTML = empty();
-    return;
-  }
-
-  $(target).innerHTML = records.map(r => `
-    <div class="dash-item">
-      <strong>
-        ${esc(TYPES[r.type] || CATEGORIES[r.category])}
-      </strong>
-      <p>${esc(r.value)}
-        ${r.unit ? esc(r.unit) : ""}
-      </p>
-      ${r.notes ? `<p>${esc(r.notes)}</p>` : ""}
-      <div class="small">${esc(dateTime(r.createdAt))}</div>
-    </div>
-  `).join("");
-}
-
-function renderDashboard() {
-  const records = state.dashData?.records || [];
-  const summary = state.dashData?.summary || {};
-
-  updateControls();
-
-  $("dash-day").textContent = fullDate(state.dashDate);
-  $("dash-subtitle").textContent =
-    `${records.length} registros de ${PATIENTS[state.patient]}.`;
-
-  const principais = summary.refeicoesRegistradas || 0;
-  const lanches = summary.lanches || 0;
-
-  $("metric-water").textContent = summary.agua?.totalMl || 0;
-  $("metric-meals").textContent = `${principais}/3`;
-  $("metric-snacks").textContent = lanches;
-  $("metric-meds").textContent =
-    summary.medicacoes?.quantidade || 0;
-  $("metric-events").textContent =
-    summary.ocorrencias?.quantidade || 0;
-  $("metric-total").textContent = records.length;
-  $("meal-progress").style.width =
-    `${principais / 3 * 100}%`;
-
-  renderDashboardMeals(records);
-  renderDashboardVitals(records);
-  renderDashboardHygiene(records);
-
-  dashboardItems(
-    "dash-medications",
-    filterRecords("medicacao", records)
-  );
-
-  dashboardItems(
-    "dash-health",
-    records.filter(r =>
-      r.category === "consulta" || r.category === "exame"
-    )
-  );
-
-  dashboardItems(
-    "dash-occurrences",
-    filterRecords("ocorrencia", records)
-  );
-
-  renderTimeline(records);
-}
-
-function renderDashboardMeals(records) {
-  const meals = records.filter(r =>
-    r.category === "alimentacao"
-  );
-
-  let html = ["cafe", "almoco", "jantar"].map(type => {
-    const record = meals.find(r => r.type === type);
-
-    return `
-      <div class="dash-item">
-        <strong>${esc(MEALS[type])}</strong>
-        <p>${record ?
-          esc(record.value) :
-          "Sem registro neste dia"}</p>
-        ${record ? `
-          <div class="small">
-            ${esc(timeLabel(record.createdAt))}
-          </div>` : ""}
-      </div>
-    `;
-  }).join("");
-
-  const snacks = meals.filter(r => r.type === "lanche");
-
-  html += `
-    <div class="dash-item">
-      <strong>Lanches (${snacks.length})</strong>
-      ${snacks.length ? snacks.map(r => `
-        <p>${esc(timeLabel(r.createdAt))} —
-          ${esc(r.value)}</p>
-      `).join("") : `<p>Sem registros.</p>`}
-    </div>
-  `;
-
-  $("dash-meals").innerHTML = html;
-}
-
-function renderDashboardVitals(records) {
-  const vitals = filterRecords("sinais_vitais", records);
-
-  $("dash-vitals").innerHTML =
-    ["pressao", "glicemia", "temperatura"].map(type => {
-      const record = vitals.find(r => r.type === type);
-
-      return `
-        <div class="dash-item">
-          <strong>${esc(TYPES[type])}</strong>
-          <p>${record ?
-            `${esc(record.value)} ${esc(record.unit)}` :
-            "Sem aferição registrada"}</p>
-          ${record ? `
-            <div class="small">
-              ${esc(timeLabel(record.createdAt))}
-            </div>
-          ` : ""}
-        </div>
-      `;
-    }).join("");
-}
-
-function renderDashboardHygiene(records) {
-  const hygiene = filterRecords("higiene", records);
-
-  $("dash-hygiene").innerHTML =
-    ["banho", "higiene_bucal", "urina", "evacuacao"]
-      .map(type => {
-        const filtered = hygiene.filter(r => r.type === type);
-
-        return `
-          <div class="dash-item">
-            <strong>${esc(TYPES[type])}</strong>
-            <p>${filtered.length} registro(s)</p>
-            ${filtered.length ? `
-              <div class="small">
-                Último: ${esc(timeLabel(filtered[0].createdAt))}
-              </div>
-            ` : ""}
+        <div id="medication-records"></div>
+      </article>
+
+      <!-- SINAIS VITAIS -->
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h3>Sinais vitais</h3>
+            <p>Registre pressão, glicemia ou temperatura.</p>
           </div>
-        `;
-      }).join("");
-}
+        </div>
+        <form id="vital-form">
+          <div class="form-grid">
+            <div>
+              <label for="vital-type">Aferição</label>
+              <select id="vital-type">
+                <option value="pressao">Pressão arterial</option>
+                <option value="glicemia">Glicemia</option>
+                <option value="temperatura">Temperatura</option>
+              </select>
+            </div>
+            <div>
+              <label for="vital-value" id="vital-label">
+                Pressão arterial (mmHg)
+              </label>
+              <input id="vital-value" placeholder="120/80"
+                required>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="btn-primary" type="submit">
+              + Registrar aferição
+            </button>
+          </div>
+        </form>
+        <div id="vital-records"></div>
+      </article>
 
-function renderTimeline(records) {
-  const sorted = [...records].sort((a, b) =>
-    String(b.createdAt).localeCompare(String(a.createdAt))
-  );
+      <!-- HIGIENE -->
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h3>Higiene e eliminações</h3>
+            <p>Banho, higiene bucal, urina e evacuação.</p>
+          </div>
+        </div>
+        <form id="hygiene-form">
+          <div class="form-grid">
+            <div>
+              <label for="hygiene-type">Atividade</label>
+              <select id="hygiene-type">
+                <option value="banho">Banho</option>
+                <option value="higiene_bucal">Higiene bucal</option>
+                <option value="urina">Urina</option>
+                <option value="evacuacao">Evacuação</option>
+              </select>
+            </div>
+            <div>
+              <label for="hygiene-note">Observação (opcional)</label>
+              <input id="hygiene-note" maxlength="500"
+                placeholder="Ex.: Sem alterações">
+            </div>
+          </div>
+          <div class="actions">
+            <button class="btn-primary" type="submit">
+              + Registrar atividade
+            </button>
+          </div>
+        </form>
+        <div id="hygiene-records"></div>
+      </article>
 
-  $("dash-timeline").innerHTML = sorted.length
-    ? sorted.map(r => `
-      <div class="timeline">
-        <div class="small">${esc(timeLabel(r.createdAt))}</div>
-        <strong>
-          ${esc(TYPES[r.type] || CATEGORIES[r.category])}
-        </strong>
-        <p>${esc(r.value)}
-          ${r.unit ? esc(r.unit) : ""}
+      <!-- CONSULTAS -->
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h3>Consultas realizadas</h3>
+            <p>Inclua orientações e observações.</p>
+          </div>
+        </div>
+        <form id="consultation-form">
+          <label for="consultation-value">Descrição</label>
+          <textarea id="consultation-value" required
+            maxlength="2000"
+            placeholder="Especialidade, profissional e orientações"></textarea>
+          <div class="actions">
+            <button class="btn-primary" type="submit">
+              + Registrar consulta
+            </button>
+          </div>
+        </form>
+        <div id="consultation-records"></div>
+      </article>
+
+      <!-- EXAMES -->
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h3>Exames realizados</h3>
+            <p>Registre os exames e informações relevantes.</p>
+          </div>
+        </div>
+        <form id="exam-form">
+          <label for="exam-value">Descrição do exame</label>
+          <textarea id="exam-value" required
+            maxlength="2000"
+            placeholder="Exame realizado e observações"></textarea>
+          <div class="actions">
+            <button class="btn-primary" type="submit">
+              + Registrar exame
+            </button>
+          </div>
+        </form>
+        <div id="exam-records"></div>
+      </article>
+
+      <!-- OCORRENCIAS -->
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h3>Ocorrências e observações</h3>
+            <p>Registre acontecimentos relevantes.</p>
+          </div>
+        </div>
+        <form id="occurrence-form">
+          <label for="occurrence-value">O que aconteceu?</label>
+          <textarea id="occurrence-value" required
+            maxlength="2000"
+            placeholder="Ex.: Recusou a comida, dormiu mal, apresentou desconforto..."></textarea>
+          <div class="actions">
+            <button class="btn-primary" type="submit">
+              + Registrar ocorrência
+            </button>
+          </div>
+        </form>
+        <div id="occurrence-records"></div>
+      </article>
+    </section>
+
+    <!-- DASHBOARD -->
+    <section id="screen-dash" hidden>
+      <div class="heading">
+        <div>
+          <h2 id="dash-title">Dashboard de Georges</h2>
+          <p class="subtitle">Acompanhamento da família.</p>
+        </div>
+        <button id="dash-logout" type="button"
+          class="btn-secondary">Sair</button>
+      </div>
+
+      <div class="datebar">
+        <button id="dash-today" class="btn-today"
+          type="button">Hoje</button>
+        <select id="dash-date" aria-label="Data do dashboard"></select>
+      </div>
+
+      <div class="banner">
+        <strong id="dash-day">Resumo do dia</strong>
+        <p id="dash-subtitle">
+          Informações registradas ao longo do dia.
         </p>
       </div>
-    `).join("")
-    : empty();
-}
 
-/* ===== NAVEGACAO ===== */
+      <div class="metrics">
+        <div class="metric">
+          <div class="metric-label">Água ingerida</div>
+          <div class="metric-value" id="metric-water">0</div>
+          <div class="metric-unit">mL registrados</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Refeições principais</div>
+          <div class="metric-value" id="metric-meals">0/3</div>
+          <div class="metric-unit">registros realizados</div>
+          <div class="progress"><div id="meal-progress"></div></div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Lanches</div>
+          <div class="metric-value" id="metric-snacks">0</div>
+          <div class="metric-unit">lançamentos no dia</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Medicações</div>
+          <div class="metric-value" id="metric-meds">0</div>
+          <div class="metric-unit">administrações registradas</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Ocorrências</div>
+          <div class="metric-value" id="metric-events">0</div>
+          <div class="metric-unit">observações registradas</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Registros do dia</div>
+          <div class="metric-value" id="metric-total">0</div>
+          <div class="metric-unit">atividades registradas</div>
+        </div>
+      </div>
 
-function showScreen(screen) {
-  state.screen = screen;
+      <article class="card">
+        <h3>Alimentação do dia</h3>
+        <div id="dash-meals" class="dash-list"></div>
+      </article>
 
-  $("screen-care").hidden = screen !== "care";
-  $("screen-dash").hidden = screen !== "dash";
+      <article class="card">
+        <h3>Últimos sinais vitais</h3>
+        <div id="dash-vitals" class="dash-list"></div>
+      </article>
 
-  $("nav-care").classList.toggle(
-    "active", screen === "care"
-  );
+      <article class="card">
+        <h3>Higiene e eliminações</h3>
+        <div id="dash-hygiene" class="dash-list"></div>
+      </article>
 
-  $("nav-dash").classList.toggle(
-    "active", screen === "dash"
-  );
+      <article class="card">
+        <h3>Medicações administradas</h3>
+        <div id="dash-medications" class="dash-list"></div>
+      </article>
 
-  window.scrollTo(0, 0);
-}
+      <article class="card">
+        <h3>Consultas e exames</h3>
+        <div id="dash-health" class="dash-list"></div>
+      </article>
 
-function changeCareDate(date) {
-  if (state.busy) return;
-  state.careDate = date;
-  state.careData = null;
-  renderCare();
-  loadCare();
-}
+      <article class="card">
+        <h3>Ocorrências</h3>
+        <div id="dash-occurrences" class="dash-list"></div>
+      </article>
 
-function changeDashDate(date) {
-  if (state.busy) return;
-  state.dashDate = date;
-  state.dashData = null;
-  renderDashboard();
-  loadDashboard();
-}
+      <article class="card">
+        <h3>Linha do tempo</h3>
+        <p class="subtitle">Histórico dos registros do dia.</p>
+        <div id="dash-timeline"></div>
+      </article>
+    </section>
 
-function checkMidnight() {
-  const current = today();
+    <div class="footer">
+      Cuidar · Georges & Ilma
+    </div>
+  </main>
+</div>
 
-  if (current === state.lastDay) return;
+<!-- MODAL DE SENHA -->
+<div id="login-modal" class="modal-bg" hidden>
+  <div class="modal" role="dialog" aria-modal="true"
+       aria-labelledby="login-heading">
+    <h2 id="login-heading">Acesso da família</h2>
+    <p>Insira sua senha para acessar o Dashboard.</p>
+    <form id="login-form">
+      <label for="family-password">Senha</label>
+      <input type="password" id="family-password"
+        autocomplete="off" required>
+      <div class="actions">
+        <button class="btn-primary" type="submit">Entrar</button>
+        <button class="btn-secondary" type="button"
+          id="login-cancel">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
 
-  const previousDay = state.lastDay;
+<div id="toast" class="toast" role="status"
+ aria-live="polite" hidden></div>
 
-  if (state.careDate === previousDay) {
-    state.careDate = current;
-    state.careData = null;
-    renderCare();
-  }
-
-  if (state.dashDate === previousDay) {
-    state.dashDate = current;
-    state.dashData = null;
-  }
-
-  state.lastDay = current;
-
-  if (state.screen === "dash") {
-    renderDashboard();
-    loadDashboard(true);
-  } else {
-    loadCare(true);
-  }
-}
-
-function bindNavigation() {
-  $("patient-georges").addEventListener("click", () =>
-    selectPatient("GEORGES")
-  );
-
-  $("patient-ilma").addEventListener("click", () =>
-    selectPatient("ILMA")
-  );
-
-  $("nav-care").addEventListener("click", () => {
-    if (state.screen === "dash") {
-      leaveDashboard();
-    } else {
-      showScreen("care");
-    }
-  });
-
-  $("nav-dash").addEventListener("click", () => {
-    if (state.screen !== "dash") openLogin();
-  });
-
-  $("dash-logout").addEventListener("click", leaveDashboard);
-
-  $("care-today").addEventListener("click", () =>
-    changeCareDate(today())
-  );
-
-  $("dash-today").addEventListener("click", () =>
-    changeDashDate(today())
-  );
-
-  $("care-date").addEventListener("change", e =>
-    changeCareDate(e.target.value)
-  );
-
-  $("dash-date").addEventListener("change", e =>
-    changeDashDate(e.target.value)
-  );
-
-  $("login-cancel").addEventListener("click", closeLogin);
-
-  $("login-form").addEventListener("submit", e => {
-    e.preventDefault();
-    loginFamily();
-  });
-
-  document.addEventListener("keydown", e => {
-    if (e.key === "Escape" && !$("login-modal").hidden) {
-      closeLogin();
-    }
-  });
-
-  $("login-modal").addEventListener("click", e => {
-    if (e.target === $("login-modal")) closeLogin();
-  });
-}
-
-/* ===== INICIALIZACAO ===== */
-
-async function initialize() {
-  state.careDate = today();
-  state.dashDate = today();
-  state.lastDay = today();
-
-  bindForms();
-  bindNavigation();
-  updateVitalFields();
-  applyPatient();
-  showScreen("care");
-
-  // Campos de alimentacao aparecem mesmo sem API.
-  renderCare();
-
-  $("connection-alert").hidden = Boolean(CONFIG.API_URL);
-
-  await loadCare();
-
-  setInterval(() => {
-    if (document.hidden || state.busy) return;
-
-    checkMidnight();
-
-    if (state.screen === "dash") {
-      loadDashboard(true);
-    } else {
-      loadCare(true);
-    }
-  }, CONFIG.REFRESH_MS);
-
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden) return;
-
-    checkMidnight();
-
-    if (state.screen === "dash") {
-      loadDashboard(true);
-    } else {
-      loadCare(true);
-    }
-  });
-}
-
-document.addEventListener("DOMContentLoaded", initialize);
+<script src="./main.js"></script>
+</body>
+</html>
