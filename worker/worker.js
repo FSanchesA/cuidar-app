@@ -70,7 +70,7 @@ export default {
         aplicativo: "Cuidar",
         componente: "Cloudflare Worker",
         status: "online",
-        versao: "2.0",
+        versao: "2.1",
         pacientes: ["GEORGES", "ILMA"]
       });
     }
