@@ -2,28 +2,35 @@
 "use strict";
 
 /*
+========================================================
  CUIDAR - MAIN.JS
- Versao 4.0 - Dashboard comparativo
+ Versao 5.0 - Dashboard livre e comparativo
+
  GitHub Pages + Cloudflare Worker + Google Apps Script
 
- LANCAMENTOS:
-  - GEORGES e ILMA independentes
-  - Rascunhos preservados durante a sessao
-  - Refeicoes fixas bloqueadas apos registro
-  - Lanches ilimitados
+ GEORGES: Verde
+ ILMA: Rosa
 
- DASHBOARD:
-  - Senha unica
-  - Duas colunas simultaneas
-  - Uma data para ambos os idosos
-  - Dados consultados separadamente
+ Dashboard:
+ - Sem senha
+ - Duas colunas simultaneas
+ - Uma data compartilhada
+ - Atualizacao automatica
 
- Nenhuma senha ou chave privada neste arquivo.
+ Lancamentos:
+ - Individuais por idoso
+ - Rascunhos separados por idoso e data
+ - Protecao durante a digitacao
+ - Bloqueio contra duplo envio
+========================================================
 */
 
 const CONFIG = {
-  API_URL: "https://cuidar-api.fabricio-cbq.workers.dev/api",
+  API_URL:
+    "https://cuidar-api.fabricio-cbq.workers.dev/api",
+
   TIMEZONE: "America/Sao_Paulo",
+
   REFRESH_MS: 60000
 };
 
@@ -41,7 +48,11 @@ const MEALS = {
   lanche: "Lanche"
 };
 
-const MAIN_MEALS = ["cafe", "almoco", "jantar"];
+const MAIN_MEALS = [
+  "cafe",
+  "almoco",
+  "jantar"
+];
 
 const TYPES = {
   ...MEALS,
@@ -67,28 +78,35 @@ const CATEGORIES = {
 
 const state = {
   patient: "GEORGES",
+
   screen: "care",
+
   careDate: "",
   dashDate: "",
+
   careData: null,
+
   dashboard: {
     GEORGES: null,
     ILMA: null
   },
-  familyToken: null,
+
   careDates: [],
   dashboardDates: [],
+
   drafts: {},
+
   busy: false,
+
   careRequest: 0,
   dashRequest: 0,
-  lastDay: "",
-  loadingDash: false
+
+  lastDay: ""
 };
 
-/* ==================================================
-   UTILITARIOS
-================================================== */
+/* =====================================================
+   1. UTILITARIOS
+===================================================== */
 
 function esc(value) {
   return String(value ?? "")
@@ -107,33 +125,51 @@ function today() {
     day: "2-digit"
   }).formatToParts(new Date());
 
-  const get = key =>
-    parts.find(p => p.type === key).value;
+  const get = type =>
+    parts.find(part => part.type === type).value;
 
-  return `${get("year")}-${get("month")}-${get("day")}`;
+  return (
+    get("year") + "-" +
+    get("month") + "-" +
+    get("day")
+  );
 }
 
 function dateLabel(value) {
   if (!value) return "";
+
   const [year, month, day] = value.split("-");
+
   return `${day}/${month}/${year}`;
 }
 
 function timeLabel(value) {
-  return value ? String(value).slice(11, 16) : "";
+  if (!value) return "";
+
+  return String(value).slice(11, 16);
 }
 
 function dateTime(value) {
   if (!value) return "";
-  return dateLabel(String(value).slice(0, 10)) +
-    " às " + timeLabel(value);
+
+  const date = String(value).slice(0, 10);
+
+  return (
+    dateLabel(date) +
+    " às " +
+    timeLabel(value)
+  );
 }
 
 function fullDate(value) {
   if (!value) return "";
 
-  const [y, m, d] = value.split("-").map(Number);
-  const date = new Date(Date.UTC(y, m - 1, d, 12));
+  const [year, month, day] =
+    value.split("-").map(Number);
+
+  const date = new Date(
+    Date.UTC(year, month - 1, day, 12)
+  );
 
   return new Intl.DateTimeFormat("pt-BR", {
     weekday: "long",
@@ -145,14 +181,18 @@ function fullDate(value) {
 }
 
 function notify(message, error = false) {
-  const element = $("toast");
-  element.textContent = message;
-  element.classList.toggle("error", error);
-  element.hidden = false;
+  const node = $("toast");
+
+  if (!node) return;
+
+  node.textContent = message;
+  node.classList.toggle("error", error);
+  node.hidden = false;
 
   clearTimeout(notify.timer);
+
   notify.timer = setTimeout(() => {
-    element.hidden = true;
+    node.hidden = true;
   }, 3500);
 }
 
@@ -172,28 +212,36 @@ function setBusy(value) {
 }
 
 function handleError(error) {
-  const message = error?.message || "Erro inesperado.";
-  notify(message, true);
-
-  if (
-    state.screen === "dash" &&
-    /sess[aã]o expirada|insira sua senha/i.test(message)
-  ) {
-    leaveDashboard();
-    openLogin();
-  }
+  notify(
+    error?.message || "Erro inesperado.",
+    true
+  );
 }
+
+/* =====================================================
+   2. API CLOUDFLARE
+===================================================== */
 
 async function api(action, payload = {}) {
   if (!CONFIG.API_URL) {
-    throw Error("A integração ainda não foi configurada.");
+    throw new Error(
+      "Integração com Google Sheets não configurada."
+    );
   }
 
   const response = await fetch(CONFIG.API_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+
+    headers: {
+      "Content-Type": "application/json"
+    },
+
     cache: "no-store",
-    body: JSON.stringify({ action, payload })
+
+    body: JSON.stringify({
+      action,
+      payload
+    })
   });
 
   let result;
@@ -201,52 +249,55 @@ async function api(action, payload = {}) {
   try {
     result = await response.json();
   } catch {
-    throw Error("Resposta inválida do servidor.");
+    throw new Error(
+      "O servidor retornou uma resposta inválida."
+    );
   }
 
   if (!response.ok || !result.ok) {
-    throw Error(
-      result.error || "Não foi possível concluir a operação."
+    throw new Error(
+      result.error ||
+      "Não foi possível concluir a operação."
     );
   }
 
   return result;
 }
 
-function empty(message = "Nenhum registro neste dia.") {
-  return `<div class="empty">${esc(message)}</div>`;
-}
-
-function filterRecords(category, records) {
-  return records
-    .filter(r => r.category === category)
-    .sort((a, b) =>
-      String(b.createdAt).localeCompare(String(a.createdAt))
-    );
-}
-
-/* ==================================================
-   RASCUNHOS SEPARADOS POR IDOSO E DATA
-================================================== */
+/* =====================================================
+   3. RASCUNHOS POR IDOSO E DATA
+===================================================== */
 
 function draftKey() {
-  return state.patient + "|" + state.careDate;
+  return (
+    state.patient +
+    "|" +
+    state.careDate
+  );
 }
 
 function drafts() {
   const key = draftKey();
-  if (!state.drafts[key]) state.drafts[key] = {};
+
+  if (!state.drafts[key]) {
+    state.drafts[key] = {};
+  }
+
   return state.drafts[key];
 }
 
 function captureDrafts() {
   const store = drafts();
 
-  $("screen-care").querySelectorAll(
-    "form input, form textarea, form select"
-  ).forEach(field => {
-    if (field.id) store[field.id] = field.value;
-  });
+  $("screen-care")
+    .querySelectorAll(
+      "form input, form textarea, form select"
+    )
+    .forEach(field => {
+      if (field.id) {
+        store[field.id] = field.value;
+      }
+    });
 }
 
 function restoreDrafts() {
@@ -263,6 +314,8 @@ function restoreDrafts() {
       field.value = value;
     }
   });
+
+  updateVitalFields(true);
 }
 
 function clearFormDraft(form) {
@@ -270,11 +323,13 @@ function clearFormDraft(form) {
 
   const store = drafts();
 
-  form.querySelectorAll("input,textarea").forEach(field => {
-    if (field.id) {
-      delete store[field.id];
-      field.value = "";
-    }
+  form.querySelectorAll(
+    "input,textarea"
+  ).forEach(field => {
+    if (!field.id) return;
+
+    delete store[field.id];
+    field.value = "";
   });
 }
 
@@ -284,11 +339,11 @@ function hasDraft() {
   return Object.entries(store).some(([id, value]) => {
     const field = $(id);
 
-    return (
+    return Boolean(
       field &&
       $("screen-care").contains(field) &&
       field.matches("input,textarea") &&
-      String(value).trim() !== ""
+      String(value).trim()
     );
   });
 }
@@ -309,7 +364,10 @@ function bindDrafts() {
   screen.addEventListener("input", event => {
     const field = event.target;
 
-    if (field.closest("form") && field.id) {
+    if (
+      field.closest("form") &&
+      field.id
+    ) {
       drafts()[field.id] = field.value;
     }
   });
@@ -317,136 +375,252 @@ function bindDrafts() {
   screen.addEventListener("change", event => {
     const field = event.target;
 
-    if (field.closest("form") && field.id) {
+    if (
+      field.closest("form") &&
+      field.id
+    ) {
       drafts()[field.id] = field.value;
     }
   });
 }
 
-/* ==================================================
-   DATAS
-================================================== */
+/* =====================================================
+   4. CONTROLE DAS DATAS
+===================================================== */
 
-function availableDates(extra = []) {
+function availableDates(extraDates = []) {
   const current = today();
-  const dates = new Set(extra);
 
-  const [y, m, d] = current.split("-").map(Number);
-  const base = new Date(Date.UTC(y, m - 1, d, 12));
+  const dates = new Set(extraDates);
+
+  const [year, month, day] =
+    current.split("-").map(Number);
+
+  const base = new Date(
+    Date.UTC(year, month - 1, day, 12)
+  );
 
   for (let i = 0; i < 60; i++) {
-    const day = new Date(base);
-    day.setUTCDate(base.getUTCDate() - i);
-    dates.add(day.toISOString().slice(0, 10));
+    const date = new Date(base);
+
+    date.setUTCDate(
+      base.getUTCDate() - i
+    );
+
+    dates.add(
+      date.toISOString().slice(0, 10)
+    );
   }
 
   dates.add(current);
 
   return [...dates]
-    .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d))
-    .filter(d => d <= current)
+    .filter(date =>
+      /^\d{4}-\d{2}-\d{2}$/.test(date)
+    )
+    .filter(date =>
+      date <= current
+    )
     .sort()
     .reverse();
 }
 
-function fillDate(id, selected, dates) {
-  const select = $(id);
-  const all = availableDates(dates);
+function fillDate(id, selected, extraDates = []) {
+  const element = $(id);
 
-  if (selected && !all.includes(selected)) {
-    all.push(selected);
-    all.sort().reverse();
+  const dates = availableDates(extraDates);
+
+  if (
+    selected &&
+    !dates.includes(selected)
+  ) {
+    dates.push(selected);
+    dates.sort().reverse();
   }
 
-  select.replaceChildren();
+  element.replaceChildren();
 
-  all.forEach(date => {
-    const option = document.createElement("option");
+  dates.forEach(date => {
+    const option =
+      document.createElement("option");
+
     option.value = date;
-    option.textContent = date === today()
-      ? "Hoje - " + dateLabel(date)
-      : dateLabel(date);
-    select.appendChild(option);
+
+    option.textContent =
+      date === today()
+        ? "Hoje - " + dateLabel(date)
+        : dateLabel(date);
+
+    element.appendChild(option);
   });
 
-  select.value = selected;
+  element.value = selected;
 }
 
 function updateDates() {
-  fillDate("care-date", state.careDate, state.careDates);
-  fillDate("dash-date", state.dashDate, state.dashboardDates);
+  fillDate(
+    "care-date",
+    state.careDate,
+    state.careDates
+  );
+
+  fillDate(
+    "dash-date",
+    state.dashDate,
+    state.dashboardDates
+  );
 
   $("care-tag").textContent =
-    state.careDate === today() ? "Hoje" : "Histórico";
+    state.careDate === today()
+      ? "Hoje"
+      : "Histórico";
 }
 
-/* ==================================================
-   TEMA E NAVEGACAO DOS IDOSOS
-================================================== */
+/* =====================================================
+   5. TEMA VISUAL
+===================================================== */
 
 function applyTheme() {
+  const dashboard =
+    state.screen === "dash";
+
   document.body.classList.toggle(
     "dashboard-mode",
-    state.screen === "dash"
+    dashboard
   );
 
   document.body.classList.toggle(
     "ilma",
-    state.screen === "care" && state.patient === "ILMA"
+    !dashboard &&
+    state.patient === "ILMA"
   );
 
   document.body.classList.toggle(
     "georges",
-    state.screen === "care" && state.patient === "GEORGES"
+    !dashboard &&
+    state.patient === "GEORGES"
   );
 
   $("patient-georges").classList.toggle(
-    "active", state.patient === "GEORGES"
+    "active",
+    state.patient === "GEORGES"
   );
 
   $("patient-ilma").classList.toggle(
-    "active", state.patient === "ILMA"
+    "active",
+    state.patient === "ILMA"
   );
 
   $("care-title").textContent =
-    "Cuidados de " + PATIENTS[state.patient];
+    "Cuidados de " +
+    PATIENTS[state.patient];
 
-  document.title = state.screen === "dash"
+  document.title = dashboard
     ? "Cuidar | Dashboard da Família"
     : "Cuidar | " + PATIENTS[state.patient];
 }
 
+/* =====================================================
+   6. NAVEGACAO
+===================================================== */
+
 function showScreen(screen) {
   state.screen = screen;
 
-  $("screen-care").hidden = screen !== "care";
-  $("screen-dash").hidden = screen !== "dash";
+  $("screen-care").hidden =
+    screen !== "care";
 
-  $("nav-care").classList.toggle("active", screen === "care");
-  $("nav-dash").classList.toggle("active", screen === "dash");
+  $("screen-dash").hidden =
+    screen !== "dash";
+
+  $("nav-care").classList.toggle(
+    "active",
+    screen === "care"
+  );
+
+  $("nav-dash").classList.toggle(
+    "active",
+    screen === "dash"
+  );
 
   applyTheme();
+
   window.scrollTo(0, 0);
 }
 
 async function selectPatient(patient) {
-  if (state.busy || state.patient === patient) return;
+  if (state.busy) return;
+
+  if (
+    state.patient === patient
+  ) return;
 
   captureDrafts();
 
   state.patient = patient;
+
   state.careData = null;
   state.careDates = [];
+
   state.careRequest++;
 
   applyTheme();
+
   renderCare();
+
   await loadCare();
 }
 
-/* ==================================================
-   EXIBICAO DOS LANCAMENTOS
-================================================== */
+function openDashboard() {
+  if (state.screen === "dash") return;
+
+  if (state.busy) return;
+
+  captureDrafts();
+
+  state.dashDate = state.careDate;
+
+  showScreen("dash");
+
+  renderDashboard();
+
+  loadDashboard();
+}
+
+function closeDashboard() {
+  state.dashRequest++;
+
+  showScreen("care");
+
+  loadCare();
+}
+
+/* =====================================================
+   7. COMPONENTES DOS REGISTROS
+===================================================== */
+
+function empty(
+  message = "Nenhum registro neste dia."
+) {
+  return (
+    '<div class="empty">' +
+    esc(message) +
+    "</div>"
+  );
+}
+
+function filterRecords(category, records) {
+  return records
+    .filter(record =>
+      record.category === category
+    )
+    .sort((a, b) =>
+      String(b.createdAt)
+        .localeCompare(
+          String(a.createdAt)
+        )
+    );
+}
 
 function recordHTML(record) {
   const name =
@@ -456,27 +630,53 @@ function recordHTML(record) {
 
   return `
     <div class="record">
+
       <div class="record-content">
-        <strong>${esc(name)}</strong>
-        <p>${esc(record.value)} ${esc(record.unit || "")}</p>
-        ${record.notes ? `<p>${esc(record.notes)}</p>` : ""}
+
+        <strong>
+          ${esc(name)}
+        </strong>
+
+        <p>
+          ${esc(record.value)}
+          ${record.unit ? esc(record.unit) : ""}
+        </p>
+
+        ${
+          record.notes
+            ? `<p>${esc(record.notes)}</p>`
+            : ""
+        }
+
         <div class="small">
-          Registrado em ${esc(dateTime(record.createdAt))}
+          Registrado em
+          ${esc(dateTime(record.createdAt))}
         </div>
+
       </div>
-      <button type="button" class="delete"
+
+      <button
+        type="button"
+        class="delete"
         data-delete="${esc(record.id)}"
         aria-label="Excluir registro"
-        title="Excluir registro">×</button>
+        title="Excluir registro"
+      >×</button>
+
     </div>
   `;
 }
 
 function renderList(id, records) {
-  $(id).innerHTML = records.length
-    ? records.map(recordHTML).join("")
-    : empty();
+  $(id).innerHTML =
+    records.length
+      ? records.map(recordHTML).join("")
+      : empty();
 }
+
+/* =====================================================
+   8. ALIMENTACAO
+===================================================== */
 
 function renderMeals() {
   const records = filterRecords(
@@ -484,95 +684,180 @@ function renderMeals() {
     state.careData?.records || []
   );
 
-  const count = MAIN_MEALS.filter(type =>
-    records.some(r => r.type === type)
-  ).length;
+  const mealCount =
+    MAIN_MEALS.filter(type =>
+      records.some(record =>
+        record.type === type
+      )
+    ).length;
 
-  $("meal-counter").textContent = count + " de 3";
+  $("meal-counter").textContent =
+    mealCount + " de 3";
 
-  const fixed = MAIN_MEALS.map(type => {
-    const record = records.find(r => r.type === type);
+  const fixedMeals =
+    MAIN_MEALS.map(type => {
+      const record = records.find(
+        item => item.type === type
+      );
 
-    if (record) {
+      if (record) {
+        return `
+          <div class="meal">
+
+            <div class="meal-title">
+              ${esc(MEALS[type])}
+            </div>
+
+            <div class="meal-done">
+
+              <div class="done-title">
+                ✓ Refeição registrada
+              </div>
+
+              <p>
+                ${esc(record.value)}
+              </p>
+
+              <div class="small">
+                ${esc(dateTime(record.createdAt))}
+              </div>
+
+              <div class="actions">
+                <button
+                  type="button"
+                  class="delete"
+                  data-delete="${esc(record.id)}"
+                  aria-label="Excluir ${esc(MEALS[type])}"
+                >×</button>
+
+                <span class="small">
+                  Exclua o registro anterior
+                  para lançar novamente.
+                </span>
+              </div>
+
+            </div>
+
+          </div>
+        `;
+      }
+
       return `
         <div class="meal">
-          <div class="meal-title">${esc(MEALS[type])}</div>
-          <div class="meal-done">
-            <div class="done-title">✓ Refeição registrada</div>
-            <p>${esc(record.value)}</p>
-            <div class="small">
-              ${esc(dateTime(record.createdAt))}
+
+          <form
+            class="meal-form"
+            data-meal="${type}"
+          >
+
+            <div class="meal-title">
+              ${esc(MEALS[type])}
             </div>
+
+            <label for="meal-${type}">
+              O que foi ingerido?
+            </label>
+
+            <textarea
+              id="meal-${type}"
+              name="value"
+              maxlength="1000"
+              required
+              placeholder="Descreva os alimentos e bebidas"
+            ></textarea>
+
             <div class="actions">
-              <button type="button" class="delete"
-                data-delete="${esc(record.id)}"
-                aria-label="Excluir ${esc(MEALS[type])}">×</button>
-              <span class="small">
-                Exclua o registro anterior para lançar novamente.
-              </span>
+              <button
+                type="submit"
+                class="btn-primary"
+              >
+                Registrar ${esc(MEALS[type])}
+              </button>
             </div>
-          </div>
+
+          </form>
+
         </div>
       `;
-    }
+    }).join("");
 
-    return `
-      <div class="meal">
-        <form class="meal-form" data-meal="${type}">
-          <div class="meal-title">${esc(MEALS[type])}</div>
-          <label for="meal-${type}">O que foi ingerido?</label>
-          <textarea id="meal-${type}" name="value"
-            maxlength="1000" required
-            placeholder="Descreva os alimentos e bebidas"></textarea>
-          <div class="actions">
-            <button type="submit" class="btn-primary">
-              Registrar ${esc(MEALS[type])}
-            </button>
-          </div>
-        </form>
-      </div>
-    `;
-  }).join("");
+  const snacks = records.filter(
+    record => record.type === "lanche"
+  );
 
-  const snacks = records.filter(r => r.type === "lanche");
-
-  const snackHTML = `
+  const snacksHTML = `
     <div class="meal">
-      <form class="meal-form" data-meal="lanche">
-        <div class="meal-title">Lanches</div>
-        <label for="meal-lanche">O que foi ingerido?</label>
-        <textarea id="meal-lanche" name="value"
-          maxlength="1000" required
-          placeholder="Ex.: Fruta, suco, biscoito..."></textarea>
+
+      <form
+        class="meal-form"
+        data-meal="lanche"
+      >
+
+        <div class="meal-title">
+          Lanches
+        </div>
+
+        <label for="meal-lanche">
+          O que foi ingerido?
+        </label>
+
+        <textarea
+          id="meal-lanche"
+          name="value"
+          maxlength="1000"
+          required
+          placeholder="Ex.: Fruta, suco, biscoito..."
+        ></textarea>
+
         <div class="actions">
-          <button type="submit" class="btn-primary">
+          <button
+            type="submit"
+            class="btn-primary"
+          >
             + Registrar lanche
           </button>
         </div>
+
         <p class="subtitle">
           É possível registrar vários lanches durante o dia.
         </p>
+
       </form>
+
       <div class="section-label">
         Lanches registrados (${snacks.length})
       </div>
-      ${snacks.length
-        ? snacks.map(recordHTML).join("")
-        : empty("Nenhum lanche registrado.")}
+
+      ${
+        snacks.length
+          ? snacks.map(recordHTML).join("")
+          : empty("Nenhum lanche registrado.")
+      }
+
     </div>
   `;
 
-  $("meals-container").innerHTML = fixed + snackHTML;
+  $("meals-container").innerHTML =
+    fixedMeals + snacksHTML;
 }
 
+/* =====================================================
+   9. RENDERIZAR LANCAMENTOS
+===================================================== */
+
 function renderCare() {
-  const records = state.careData?.records || [];
-  const summary = state.careData?.summary || {};
+  const records =
+    state.careData?.records || [];
+
+  const summary =
+    state.careData?.summary || {};
 
   updateDates();
+
   renderMeals();
 
-  $("water-total").textContent = summary.agua?.totalMl || 0;
+  $("water-total").textContent =
+    summary.agua?.totalMl || 0;
 
   const sections = [
     ["water-records", "agua"],
@@ -585,74 +870,113 @@ function renderCare() {
   ];
 
   sections.forEach(([id, category]) => {
-    renderList(id, filterRecords(category, records));
+    renderList(
+      id,
+      filterRecords(category, records)
+    );
   });
 
   restoreDrafts();
 }
 
-/* ==================================================
-   CARREGAR CUIDADOS SEM APAGAR TEXTOS
-================================================== */
+/* =====================================================
+   10. CARREGAR CUIDADOS
+
+ Protege campos durante digitacao.
+===================================================== */
 
 async function loadCare(silent = false) {
-  if (state.busy || !CONFIG.API_URL) return;
-  if (silent && (hasDraft() || isTyping())) return;
+  if (state.busy || !CONFIG.API_URL) {
+    return;
+  }
+
+  if (
+    silent &&
+    (hasDraft() || isTyping())
+  ) {
+    return;
+  }
 
   const patient = state.patient;
   const date = state.careDate;
   const requestId = ++state.careRequest;
 
   try {
-    const data = await api("init", { patient, date });
+    const data = await api("init", {
+      patient,
+      date
+    });
 
     if (
-      state.patient !== patient ||
-      state.careDate !== date ||
+      patient !== state.patient ||
+      date !== state.careDate ||
       requestId !== state.careRequest
     ) return;
 
     if (isTyping()) return;
-    if (silent && hasDraft()) return;
+
+    if (
+      silent &&
+      hasDraft()
+    ) return;
 
     captureDrafts();
+
     state.careData = data;
+
     state.careDates = data.dates || [];
+
     renderCare();
 
   } catch (error) {
-    if (!silent) handleError(error);
+    if (!silent) {
+      handleError(error);
+    }
   }
 }
 
-/* ==================================================
-   SALVAMENTO E EXCLUSAO
-================================================== */
+/* =====================================================
+   11. ATUALIZAR APOS SALVAR
+===================================================== */
 
 async function refreshCare() {
   const patient = state.patient;
   const date = state.careDate;
-  const requestId = ++state.careRequest;
 
-  const data = await api("init", { patient, date });
+  const requestId =
+    ++state.careRequest;
+
+  const data = await api("init", {
+    patient,
+    date
+  });
 
   if (
-    state.patient !== patient ||
-    state.careDate !== date ||
+    patient !== state.patient ||
+    date !== state.careDate ||
     requestId !== state.careRequest
   ) return;
 
   state.careData = data;
   state.careDates = data.dates || [];
+
   renderCare();
 }
+
+/* =====================================================
+   12. SALVAR REGISTROS
+===================================================== */
 
 async function saveRecord(fields, form = null) {
   if (state.busy) return false;
 
   captureDrafts();
+
   setBusy(true);
+
   notify("Salvando registro...");
+
+  let saved = false;
 
   try {
     await api("save", {
@@ -661,28 +985,53 @@ async function saveRecord(fields, form = null) {
       date: state.careDate
     });
 
-    if (form) clearFormDraft(form);
+    saved = true;
 
-    await refreshCare();
-    notify("Registro salvo com sucesso.");
+    if (form) {
+      clearFormDraft(form);
+    }
+
+    try {
+      await refreshCare();
+
+      notify("Registro salvo com sucesso.");
+
+    } catch (refreshError) {
+      notify(
+        "Registro salvo. Não foi possível atualizar a tela; abra novamente os lançamentos.",
+        true
+      );
+    }
+
     return true;
 
   } catch (error) {
-    handleError(error);
+    if (!saved) {
+      handleError(error);
+    }
+
     return false;
+
   } finally {
     setBusy(false);
   }
 }
 
+/* =====================================================
+   13. EXCLUIR REGISTROS
+===================================================== */
+
 async function deleteRecord(id) {
   if (state.busy) return;
 
-  if (!window.confirm(
+  const confirmed = window.confirm(
     "Tem certeza que deseja excluir este lançamento?"
-  )) return;
+  );
+
+  if (!confirmed) return;
 
   captureDrafts();
+
   setBusy(true);
 
   try {
@@ -692,260 +1041,343 @@ async function deleteRecord(id) {
     });
 
     await refreshCare();
+
     notify("Lançamento excluído.");
 
   } catch (error) {
     handleError(error);
+
   } finally {
     setBusy(false);
   }
 }
 
-/* ==================================================
-   CAMPOS DE SINAIS VITAIS
-================================================== */
+/* =====================================================
+   14. SINAIS VITAIS
+===================================================== */
 
-function updateVitalFields(preserve = false) {
+function updateVitalFields(
+  preserveValue = false
+) {
   const type = $("vital-type").value;
 
   const options = {
-    pressao: ["Pressão arterial (mmHg)", "Ex.: 120/80"],
-    glicemia: ["Glicemia (mg/dL)", "Ex.: 105"],
-    temperatura: ["Temperatura (°C)", "Ex.: 36,5"]
+    pressao: [
+      "Pressão arterial (mmHg)",
+      "Ex.: 120/80"
+    ],
+    glicemia: [
+      "Glicemia (mg/dL)",
+      "Ex.: 105"
+    ],
+    temperatura: [
+      "Temperatura (°C)",
+      "Ex.: 36,5"
+    ]
   };
 
-  $("vital-label").textContent = options[type][0];
-  $("vital-value").placeholder = options[type][1];
-  $("vital-value").inputMode =
-    type === "pressao" ? "text" : "decimal";
+  const input = $("vital-value");
 
-  if (!preserve) {
-    $("vital-value").value = "";
+  $("vital-label").textContent =
+    options[type][0];
+
+  input.placeholder =
+    options[type][1];
+
+  input.inputMode =
+    type === "pressao"
+      ? "text"
+      : "decimal";
+
+  if (!preserveValue) {
+    input.value = "";
+
     delete drafts()["vital-value"];
   }
 }
 
-/* ==================================================
-   EVENTOS DOS FORMULARIOS
-================================================== */
+/* =====================================================
+   15. FORMULARIOS
+===================================================== */
 
 function bindForms() {
-  $("meals-container").addEventListener("submit", async e => {
-    const form = e.target.closest(".meal-form");
-    if (!form) return;
 
-    e.preventDefault();
+  // ALIMENTACAO
 
-    const type = form.dataset.meal;
-    const value = form.querySelector(
-      'textarea[name="value"]'
-    ).value.trim();
+  $("meals-container").addEventListener(
+    "submit",
+    async event => {
+      const form =
+        event.target.closest(".meal-form");
 
-    if (!value) {
-      notify("Descreva os alimentos ingeridos.", true);
-      return;
-    }
+      if (!form) return;
 
-    await saveRecord({
-      category: "alimentacao",
-      type,
-      value
-    }, form);
-  });
+      event.preventDefault();
 
-  $("water-value").addEventListener("input", e => {
-    e.target.value = e.target.value
-      .replace(/\D/g, "")
-      .slice(0, 3);
+      if (state.busy) return;
 
-    drafts()["water-value"] = e.target.value;
-  });
+      const type = form.dataset.meal;
 
-  $("water-form").addEventListener("submit", async e => {
-    e.preventDefault();
+      const value = form.querySelector(
+        'textarea[name="value"]'
+      ).value.trim();
 
-    const value = $("water-value").value.trim();
-
-    if (!/^\d{1,3}$/.test(value) || Number(value) < 1) {
-      notify("Informe uma quantidade entre 1 e 999 mL.", true);
-      return;
-    }
-
-    await saveRecord({
-      category: "agua",
-      type: "agua",
-      value: Number(value)
-    }, e.currentTarget);
-  });
-
-  $("medication-form").addEventListener("submit", async e => {
-    e.preventDefault();
-
-    await saveRecord({
-      category: "medicacao",
-      type: "medicacao",
-      value: $("medication-value").value.trim()
-    }, e.currentTarget);
-  });
-
-  $("vital-type").addEventListener(
-    "change", () => updateVitalFields()
-  );
-
-  $("vital-form").addEventListener("submit", async e => {
-    e.preventDefault();
-
-    const type = $("vital-type").value;
-    const value = $("vital-value").value.trim();
-
-    if (
-      type === "pressao" &&
-      !/^\d{2,3}\s*\/\s*\d{2,3}$/.test(value)
-    ) {
-      notify("Informe a pressão no formato 120/80.", true);
-      return;
-    }
-
-    await saveRecord({
-      category: "sinais_vitais",
-      type,
-      value
-    }, e.currentTarget);
-  });
-
-  $("hygiene-form").addEventListener("submit", async e => {
-    e.preventDefault();
-
-    await saveRecord({
-      category: "higiene",
-      type: $("hygiene-type").value,
-      value: "Realizado",
-      notes: $("hygiene-note").value.trim()
-    }, e.currentTarget);
-  });
-
-  const textForms = [
-    ["consultation-form", "consultation-value", "consulta"],
-    ["exam-form", "exam-value", "exame"],
-    ["occurrence-form", "occurrence-value", "ocorrencia"]
-  ];
-
-  textForms.forEach(([formId, inputId, category]) => {
-    $(formId).addEventListener("submit", async e => {
-      e.preventDefault();
-
-      const value = $(inputId).value.trim();
-      if (!value) return;
+      if (!value) {
+        notify(
+          "Descreva os alimentos ingeridos.",
+          true
+        );
+        return;
+      }
 
       await saveRecord({
-        category,
-        type: category,
+        category: "alimentacao",
+        type,
         value
-      }, e.currentTarget);
-    });
-  });
+      }, form);
+    }
+  );
 
-  $("screen-care").addEventListener("click", e => {
-    const button = e.target.closest("[data-delete]");
+  // AGUA
 
-    if (button) deleteRecord(button.dataset.delete);
-  });
+  $("water-value").addEventListener(
+    "input",
+    event => {
+      event.target.value =
+        event.target.value
+          .replace(/\D/g, "")
+          .slice(0, 3);
+
+      drafts()["water-value"] =
+        event.target.value;
+    }
+  );
+
+  $("water-form").addEventListener(
+    "submit",
+    async event => {
+      event.preventDefault();
+
+      if (state.busy) return;
+
+      const value =
+        $("water-value").value.trim();
+
+      if (
+        !/^\d{1,3}$/.test(value) ||
+        Number(value) < 1
+      ) {
+        notify(
+          "Informe entre 1 e 999 mL.",
+          true
+        );
+        return;
+      }
+
+      await saveRecord({
+        category: "agua",
+        type: "agua",
+        value: Number(value)
+      }, event.currentTarget);
+    }
+  );
+
+  // MEDICACOES
+
+  $("medication-form").addEventListener(
+    "submit",
+    async event => {
+      event.preventDefault();
+
+      if (state.busy) return;
+
+      const value =
+        $("medication-value").value.trim();
+
+      if (!value) {
+        notify(
+          "Informe a medicação administrada.",
+          true
+        );
+        return;
+      }
+
+      await saveRecord({
+        category: "medicacao",
+        type: "medicacao",
+        value
+      }, event.currentTarget);
+    }
+  );
+
+  // SINAIS VITAIS
+
+  $("vital-type").addEventListener(
+    "change",
+    () => updateVitalFields()
+  );
+
+  $("vital-form").addEventListener(
+    "submit",
+    async event => {
+      event.preventDefault();
+
+      if (state.busy) return;
+
+      const type =
+        $("vital-type").value;
+
+      const value =
+        $("vital-value").value.trim();
+
+      if (
+        type === "pressao" &&
+        !/^\d{2,3}\s*\/\s*\d{2,3}$/.test(value)
+      ) {
+        notify(
+          "Informe a pressão no formato 120/80.",
+          true
+        );
+        return;
+      }
+
+      if (!value) {
+        notify(
+          "Informe o resultado da aferição.",
+          true
+        );
+        return;
+      }
+
+      await saveRecord({
+        category: "sinais_vitais",
+        type,
+        value
+      }, event.currentTarget);
+    }
+  );
+
+  // HIGIENE
+
+  $("hygiene-form").addEventListener(
+    "submit",
+    async event => {
+      event.preventDefault();
+
+      if (state.busy) return;
+
+      await saveRecord({
+        category: "higiene",
+        type: $("hygiene-type").value,
+        value: "Realizado",
+        notes: $("hygiene-note").value.trim()
+      }, event.currentTarget);
+    }
+  );
+
+  // CONSULTAS, EXAMES E OCORRENCIAS
+
+  const textForms = [
+    [
+      "consultation-form",
+      "consultation-value",
+      "consulta"
+    ],
+    [
+      "exam-form",
+      "exam-value",
+      "exame"
+    ],
+    [
+      "occurrence-form",
+      "occurrence-value",
+      "ocorrencia"
+    ]
+  ];
+
+  textForms.forEach(
+    ([formId, fieldId, category]) => {
+      $(formId).addEventListener(
+        "submit",
+        async event => {
+          event.preventDefault();
+
+          if (state.busy) return;
+
+          const value =
+            $(fieldId).value.trim();
+
+          if (!value) {
+            notify(
+              "Preencha a descrição.",
+              true
+            );
+            return;
+          }
+
+          await saveRecord({
+            category,
+            type: category,
+            value
+          }, event.currentTarget);
+        }
+      );
+    }
+  );
+
+  // EXCLUSAO
+
+  $("screen-care").addEventListener(
+    "click",
+    event => {
+      const button =
+        event.target.closest("[data-delete]");
+
+      if (button) {
+        deleteRecord(
+          button.dataset.delete
+        );
+      }
+    }
+  );
 }
 
-/* ==================================================
-   SENHA UNICA DO DASHBOARD
-================================================== */
+/* =====================================================
+   16. DASHBOARD LIVRE
 
-function openLogin() {
-  $("login-modal").hidden = false;
-  $("family-password").value = "";
-  $("family-password").focus();
-}
-
-function closeLogin() {
-  $("login-modal").hidden = true;
-  $("family-password").value = "";
-}
-
-async function loginFamily() {
-  if (state.busy) return;
-
-  setBusy(true);
-
-  try {
-    const result = await api("login", {
-      password: $("family-password").value
-    });
-
-    state.familyToken = result.token;
-    state.dashDate = state.careDate;
-
-    closeLogin();
-    showScreen("dash");
-    await loadDashboard();
-
-  } catch (error) {
-    handleError(error);
-  } finally {
-    setBusy(false);
-  }
-}
-
-function leaveDashboard() {
-  const token = state.familyToken;
-
-  state.familyToken = null;
-  state.dashboard.GEORGES = null;
-  state.dashboard.ILMA = null;
-  state.dashRequest++;
-
-  showScreen("care");
-
-  if (token) {
-    api("logout", { token }).catch(() => {});
-  }
-}
-
-/* ==================================================
-   CONSULTAR GEORGES E ILMA SIMULTANEAMENTE
-================================================== */
+ Consulta publica via acao "init".
+ Nao utiliza senha nem token.
+===================================================== */
 
 async function loadDashboard(silent = false) {
-  if (!state.familyToken) {
-    openLogin();
-    return;
-  }
-
   if (!CONFIG.API_URL) return;
-  if (state.loadingDash) return;
 
   const date = state.dashDate;
-  const token = state.familyToken;
-  const requestId = ++state.dashRequest;
 
-  state.loadingDash = true;
-  if (!silent) $("dash-loading").hidden = false;
+  const requestId =
+    ++state.dashRequest;
+
+  if (!silent) {
+    $("dash-loading").hidden = false;
+  }
 
   try {
     const [georges, ilma] = await Promise.all([
-      api("list", {
-        mode: "familia",
+      api("init", {
         patient: "GEORGES",
-        date,
-        token
+        date
       }),
-      api("list", {
-        mode: "familia",
+
+      api("init", {
         patient: "ILMA",
-        date,
-        token
+        date
       })
     ]);
 
     if (
       date !== state.dashDate ||
-      token !== state.familyToken ||
-      requestId !== state.dashRequest
+      requestId !== state.dashRequest ||
+      state.screen !== "dash"
     ) return;
 
     state.dashboard.GEORGES = georges;
@@ -962,31 +1394,60 @@ async function loadDashboard(silent = false) {
 
   } catch (error) {
     if (!silent) {
-      $("summary-georges").textContent = "Falha na atualização";
-      $("summary-ilma").textContent = "Falha na atualização";
+      $("summary-georges").textContent =
+        "Falha na atualização";
+
+      $("summary-ilma").textContent =
+        "Falha na atualização";
+
       handleError(error);
     }
+
   } finally {
-    state.loadingDash = false;
-    $("dash-loading").hidden = true;
+    if (requestId === state.dashRequest) {
+      $("dash-loading").hidden = true;
+    }
   }
 }
 
-/* ==================================================
-   COMPONENTES DO DASHBOARD COMPARATIVO
-================================================== */
+/* =====================================================
+   17. COMPONENTES DO DASHBOARD
+===================================================== */
 
-function compMetric(label, value, unit = "", percent = null) {
+function compMetric(
+  label,
+  value,
+  unit = "",
+  percent = null
+) {
+  const progress =
+    percent === null
+      ? ""
+      : `
+        <div class="comp-progress">
+          <div style="width:${
+            Math.max(0, Math.min(100, percent))
+          }%"></div>
+        </div>
+      `;
+
   return `
     <div class="comp-metric">
-      <div class="comp-label">${esc(label)}</div>
-      <div class="comp-value">${esc(value)}</div>
-      <div class="comp-unit">${esc(unit)}</div>
-      ${percent === null ? "" : `
-        <div class="comp-progress">
-          <div style="width:${Math.max(0,Math.min(100,percent))}%"></div>
-        </div>
-      `}
+
+      <div class="comp-label">
+        ${esc(label)}
+      </div>
+
+      <div class="comp-value">
+        ${esc(value)}
+      </div>
+
+      <div class="comp-unit">
+        ${esc(unit)}
+      </div>
+
+      ${progress}
+
     </div>
   `;
 }
@@ -994,195 +1455,431 @@ function compMetric(label, value, unit = "", percent = null) {
 function compSection(title, content) {
   return `
     <section class="comp-section">
-      <h3>${esc(title)}</h3>
+
+      <h3>
+        ${esc(title)}
+      </h3>
+
       ${content}
+
     </section>
   `;
 }
 
-function compRecord(title, value, time = "", notes = "") {
+function compRecord(
+  title,
+  value,
+  time = "",
+  notes = ""
+) {
   return `
     <div class="comp-record">
-      <strong>${esc(title)}</strong>
-      <p>${esc(value)}</p>
-      ${notes ? `<p>${esc(notes)}</p>` : ""}
-      ${time ? `<div class="small">${esc(time)}</div>` : ""}
+
+      <strong>
+        ${esc(title)}
+      </strong>
+
+      <p>
+        ${esc(value)}
+      </p>
+
+      ${
+        notes
+          ? `<p>${esc(notes)}</p>`
+          : ""
+      }
+
+      ${
+        time
+          ? `<div class="small">${esc(time)}</div>`
+          : ""
+      }
+
     </div>
   `;
 }
 
-function compEmpty(message = "Sem registro neste dia") {
-  return `<div class="comp-empty">${esc(message)}</div>`;
+function compEmpty(
+  message = "Sem registro neste dia"
+) {
+  return `
+    <div class="comp-empty">
+      ${esc(message)}
+    </div>
+  `;
 }
 
 function compList(records) {
-  if (!records.length) return compEmpty();
+  if (!records.length) {
+    return compEmpty();
+  }
 
   return records
     .slice()
     .sort((a, b) =>
-      String(b.createdAt).localeCompare(String(a.createdAt))
+      String(b.createdAt).localeCompare(
+        String(a.createdAt)
+      )
     )
-    .map(r => compRecord(
-      TYPES[r.type] || CATEGORIES[r.category] || "Registro",
-      r.value + (r.unit ? " " + r.unit : ""),
-      timeLabel(r.createdAt),
-      r.notes || ""
-    ))
+    .map(record => {
+      const title =
+        TYPES[record.type] ||
+        CATEGORIES[record.category] ||
+        "Registro";
+
+      return compRecord(
+        title,
+        String(record.value ?? "") +
+          (record.unit ? " " + record.unit : ""),
+        timeLabel(record.createdAt),
+        record.notes || ""
+      );
+    })
     .join("");
 }
 
-/* ==================================================
-   PAINEL INDIVIDUAL DENTRO DA COMPARACAO
-================================================== */
+/* =====================================================
+   18. PAINEL INDIVIDUAL
+
+ O mesmo formato e utilizado em ambas colunas.
+===================================================== */
 
 function buildPatientDashboard(data) {
-  const records = data.records || [];
-  const summary = data.summary || {};
+  const records =
+    data.records || [];
 
-  const meals = filterRecords("alimentacao", records);
-  const water = filterRecords("agua", records);
-  const medications = filterRecords("medicacao", records);
-  const vitals = filterRecords("sinais_vitais", records);
-  const hygiene = filterRecords("higiene", records);
-  const occurrences = filterRecords("ocorrencia", records);
+  const meals = filterRecords(
+    "alimentacao",
+    records
+  );
 
-  const mealsCount = MAIN_MEALS.filter(type =>
-    meals.some(r => r.type === type)
-  ).length;
+  const water = filterRecords(
+    "agua",
+    records
+  );
 
-  const snacks = meals.filter(r => r.type === "lanche");
+  const medications = filterRecords(
+    "medicacao",
+    records
+  );
+
+  const vitals = filterRecords(
+    "sinais_vitais",
+    records
+  );
+
+  const hygiene = filterRecords(
+    "higiene",
+    records
+  );
+
+  const occurrences = filterRecords(
+    "ocorrencia",
+    records
+  );
+
+  const mealsCount =
+    MAIN_MEALS.filter(type =>
+      meals.some(record =>
+        record.type === type
+      )
+    ).length;
+
+  const snacks = meals.filter(
+    record =>
+      record.type === "lanche"
+  );
 
   const totalWater = water.reduce(
-    (sum, r) => sum + Number(r.value || 0),
+    (sum, record) =>
+      sum + (
+        Number(
+          String(record.value ?? "")
+            .replace(",", ".")
+        ) || 0
+      ),
     0
   );
 
   let html = "";
 
-  html += compMetric("Água ingerida", totalWater + " mL", "Volume registrado");
+  // INDICADORES
+
+  html += compMetric(
+    "Água ingerida",
+    totalWater + " mL",
+    "Volume registrado"
+  );
+
   html += compMetric(
     "Refeições principais",
     mealsCount + "/3",
     "Café, almoço e jantar",
     mealsCount / 3 * 100
   );
-  html += compMetric("Lanches", snacks.length, "Registros do dia");
-  html += compMetric("Medicações", medications.length, "Administrações registradas");
-  html += compMetric("Sinais vitais", vitals.length, "Aferições registradas");
-  html += compMetric("Higiene e eliminações", hygiene.length, "Atividades registradas");
-  html += compMetric("Ocorrências", occurrences.length, "Observações registradas");
-  html += compMetric("Total do dia", records.length, "Lançamentos");
 
-  const mealsHTML = MAIN_MEALS.map(type => {
-    const r = meals.find(item => item.type === type);
+  html += compMetric(
+    "Lanches",
+    snacks.length,
+    "Registros do dia"
+  );
 
-    return r
-      ? compRecord(MEALS[type], r.value, timeLabel(r.createdAt))
-      : compRecord(MEALS[type], "Sem registro");
-  }).join("");
+  html += compMetric(
+    "Medicações",
+    medications.length,
+    "Administrações"
+  );
 
-  const snacksHTML = snacks.length
-    ? snacks.map(r =>
-        compRecord("Lanche", r.value, timeLabel(r.createdAt))
-      ).join("")
-    : compEmpty("Nenhum lanche registrado");
+  html += compMetric(
+    "Sinais vitais",
+    vitals.length,
+    "Aferições"
+  );
 
-  html += compSection("Alimentação",
+  html += compMetric(
+    "Higiene e eliminações",
+    hygiene.length,
+    "Atividades"
+  );
+
+  html += compMetric(
+    "Ocorrências",
+    occurrences.length,
+    "Observações"
+  );
+
+  html += compMetric(
+    "Total do dia",
+    records.length,
+    "Lançamentos"
+  );
+
+  // ALIMENTACAO
+
+  const mealsHTML =
+    MAIN_MEALS.map(type => {
+      const record = meals.find(
+        item =>
+          item.type === type
+      );
+
+      return record
+        ? compRecord(
+            MEALS[type],
+            record.value,
+            timeLabel(record.createdAt)
+          )
+        : compRecord(
+            MEALS[type],
+            "Sem registro"
+          );
+    }).join("");
+
+  const snacksHTML =
+    snacks.length
+      ? snacks.map(record =>
+          compRecord(
+            "Lanche",
+            record.value,
+            timeLabel(record.createdAt)
+          )
+        ).join("")
+      : compEmpty("Nenhum lanche registrado");
+
+  html += compSection(
+    "Alimentação",
     mealsHTML +
-    `<div class="section-label">Lanches (${snacks.length})</div>` +
+    `<div class="section-label">
+       Lanches (${snacks.length})
+     </div>` +
     snacksHTML
   );
 
-  const vitalHTML = ["pressao","glicemia","temperatura"]
-    .map(type => {
-      const r = vitals.find(item => item.type === type);
+  // SINAIS VITAIS
 
-      return r
-        ? compRecord(
-            TYPES[type],
-            r.value + " " + (r.unit || ""),
-            timeLabel(r.createdAt)
-          )
-        : compRecord(TYPES[type], "Sem registro");
-    })
-    .join("");
+  const vitalHTML = [
+    "pressao",
+    "glicemia",
+    "temperatura"
+  ].map(type => {
+    const record = vitals.find(
+      item =>
+        item.type === type
+    );
 
-  html += compSection("Sinais vitais", vitalHTML);
+    return record
+      ? compRecord(
+          TYPES[type],
+          String(record.value) +
+            (record.unit ? " " + record.unit : ""),
+          timeLabel(record.createdAt)
+        )
+      : compRecord(
+          TYPES[type],
+          "Sem registro"
+        );
+  }).join("");
+
+  html += compSection(
+    "Sinais vitais",
+    vitalHTML
+  );
+
+  // HIGIENE
 
   const hygieneHTML = [
-    "banho","higiene_bucal","urina","evacuacao"
+    "banho",
+    "higiene_bucal",
+    "urina",
+    "evacuacao"
   ].map(type => {
-    const matches = hygiene.filter(r => r.type === type);
+    const matches =
+      hygiene.filter(record =>
+        record.type === type
+      );
+
     const latest = matches[0];
 
     return compRecord(
       TYPES[type],
       matches.length + " registro(s)",
-      latest ? "Último: " + timeLabel(latest.createdAt) : ""
+      latest
+        ? "Último: " +
+          timeLabel(latest.createdAt)
+        : ""
     );
   }).join("");
 
-  html += compSection("Higiene e eliminações", hygieneHTML);
-  html += compSection("Medicações", compList(medications));
-
-  const healthEvents = records.filter(r =>
-    r.category === "consulta" || r.category === "exame"
+  html += compSection(
+    "Higiene e eliminações",
+    hygieneHTML
   );
 
-  html += compSection("Consultas e exames", compList(healthEvents));
-  html += compSection("Ocorrências", compList(occurrences));
+  // MEDICACOES
 
-  const timeline = records.slice().sort((a, b) =>
-    String(b.createdAt).localeCompare(String(a.createdAt))
+  html += compSection(
+    "Medicações",
+    compList(medications)
   );
 
-  const timelineHTML = timeline.length
-    ? timeline.map(r => `
-        <div class="comp-timeline">
-          <div class="small">${esc(timeLabel(r.createdAt))}</div>
-          <strong>${esc(TYPES[r.type] || CATEGORIES[r.category] || "Registro")}</strong>
-          <p>${esc(r.value)} ${esc(r.unit || "")}</p>
-        </div>
-      `).join("")
-    : compEmpty();
+  // CONSULTAS E EXAMES
 
-  html += compSection("Linha do tempo", timelineHTML);
+  const healthEvents = records.filter(
+    record =>
+      record.category === "consulta" ||
+      record.category === "exame"
+  );
+
+  html += compSection(
+    "Consultas e exames",
+    compList(healthEvents)
+  );
+
+  // OCORRENCIAS
+
+  html += compSection(
+    "Ocorrências",
+    compList(occurrences)
+  );
+
+  // LINHA DO TEMPO
+
+  const timeline = records
+    .slice()
+    .sort((a, b) =>
+      String(b.createdAt)
+        .localeCompare(
+          String(a.createdAt)
+        )
+    );
+
+  const timelineHTML =
+    timeline.length
+      ? timeline.map(record => {
+          const title =
+            TYPES[record.type] ||
+            CATEGORIES[record.category] ||
+            "Registro";
+
+          return `
+            <div class="comp-timeline">
+
+              <div class="small">
+                ${esc(timeLabel(record.createdAt))}
+              </div>
+
+              <strong>
+                ${esc(title)}
+              </strong>
+
+              <p>
+                ${esc(record.value)}
+                ${esc(record.unit || "")}
+              </p>
+
+            </div>
+          `;
+        }).join("")
+      : compEmpty();
+
+  html += compSection(
+    "Linha do tempo",
+    timelineHTML
+  );
 
   return html;
 }
 
-/* ==================================================
-   RENDERIZAR AS DUAS COLUNAS
-================================================== */
+/* =====================================================
+   19. RENDERIZAR DASHBOARD COMPARATIVO
+===================================================== */
 
 function renderDashboard() {
   updateDates();
 
-  $("dash-day").textContent = fullDate(state.dashDate);
+  $("dash-day").textContent =
+    fullDate(state.dashDate);
 
-  const georges = state.dashboard.GEORGES;
-  const ilma = state.dashboard.ILMA;
+  const georges =
+    state.dashboard.GEORGES;
+
+  const ilma =
+    state.dashboard.ILMA;
 
   if (!georges || !ilma) {
-    $("summary-georges").textContent = "Carregando registros...";
-    $("summary-ilma").textContent = "Carregando registros...";
+    $("summary-georges").textContent =
+      "Carregando registros...";
+
+    $("summary-ilma").textContent =
+      "Carregando registros...";
+
     $("dashboard-georges").innerHTML = "";
     $("dashboard-ilma").innerHTML = "";
+
     $("dash-subtitle").textContent =
       "Consultando os cuidados registrados.";
+
     return;
   }
 
+  const georgesRecords =
+    georges.records || [];
+
+  const ilmaRecords =
+    ilma.records || [];
+
   $("summary-georges").textContent =
-    `${georges.records.length} lançamento(s)`;
+    georgesRecords.length +
+    " lançamento(s)";
 
   $("summary-ilma").textContent =
-    `${ilma.records.length} lançamento(s)`;
+    ilmaRecords.length +
+    " lançamento(s)";
 
   $("dash-subtitle").textContent =
-    "Georges e Ilma · " + dateLabel(state.dashDate) +
-    " · Atualização independente por idoso.";
+    "Georges e Ilma · " +
+    dateLabel(state.dashDate) +
+    " · Comparativo do dia.";
 
   $("dashboard-georges").innerHTML =
     buildPatientDashboard(georges);
@@ -1191,9 +1888,9 @@ function renderDashboard() {
     buildPatientDashboard(ilma);
 }
 
-/* ==================================================
-   ALTERACAO DE DATA
-================================================== */
+/* =====================================================
+   20. ALTERAR DATAS
+===================================================== */
 
 function changeCareDate(date) {
   if (state.busy) return;
@@ -1202,9 +1899,11 @@ function changeCareDate(date) {
 
   state.careDate = date;
   state.careData = null;
+
   state.careRequest++;
 
   renderCare();
+
   loadCare();
 }
 
@@ -1212,138 +1911,186 @@ function changeDashDate(date) {
   if (state.busy) return;
 
   state.dashDate = date;
+
   state.dashboard.GEORGES = null;
   state.dashboard.ILMA = null;
+
   state.dashRequest++;
 
   renderDashboard();
+
   loadDashboard();
 }
 
-/* ==================================================
-   VIRADA DO DIA
-================================================== */
+/* =====================================================
+   21. VIRADA DO DIA
+===================================================== */
 
 function checkMidnight() {
   const current = today();
-  if (current === state.lastDay) return;
+
+  if (
+    current === state.lastDay
+  ) return;
 
   captureDrafts();
 
-  const previousDay = state.lastDay;
+  const previousDay =
+    state.lastDay;
 
-  if (state.careDate === previousDay) {
+  if (
+    state.careDate === previousDay
+  ) {
     state.careDate = current;
     state.careData = null;
+
     state.careRequest++;
-    renderCare();
   }
 
-  if (state.dashDate === previousDay) {
+  if (
+    state.dashDate === previousDay
+  ) {
     state.dashDate = current;
+
     state.dashboard.GEORGES = null;
     state.dashboard.ILMA = null;
+
     state.dashRequest++;
   }
 
   state.lastDay = current;
 
+  renderCare();
+
   if (state.screen === "dash") {
     renderDashboard();
-    loadDashboard(true);
-  } else {
-    loadCare(true);
   }
 }
 
-/* ==================================================
-   NAVEGACAO
-================================================== */
+/* =====================================================
+   22. EVENTOS DE NAVEGACAO
+===================================================== */
 
 function bindNavigation() {
-  $("patient-georges").addEventListener("click", () =>
-    selectPatient("GEORGES")
+
+  // GEORGES
+
+  $("patient-georges").addEventListener(
+    "click",
+    () => selectPatient("GEORGES")
   );
 
-  $("patient-ilma").addEventListener("click", () =>
-    selectPatient("ILMA")
+  // ILMA
+
+  $("patient-ilma").addEventListener(
+    "click",
+    () => selectPatient("ILMA")
   );
 
-  $("nav-care").addEventListener("click", () => {
-    if (state.screen === "dash") {
-      leaveDashboard();
-    } else {
-      showScreen("care");
+  // LANCAMENTOS
+
+  $("nav-care").addEventListener(
+    "click",
+    () => {
+      if (
+        state.screen === "dash"
+      ) {
+        closeDashboard();
+      }
     }
-  });
-
-  $("nav-dash").addEventListener("click", () => {
-    if (state.screen !== "dash") openLogin();
-  });
-
-  $("dash-logout").addEventListener("click", leaveDashboard);
-
-  $("care-today").addEventListener("click", () =>
-    changeCareDate(today())
   );
 
-  $("dash-today").addEventListener("click", () =>
-    changeDashDate(today())
+  // DASHBOARD LIVRE
+
+  $("nav-dash").addEventListener(
+    "click",
+    openDashboard
   );
 
-  $("care-date").addEventListener("change", e =>
-    changeCareDate(e.target.value)
+  // HOJE - LANCAMENTOS
+
+  $("care-today").addEventListener(
+    "click",
+    () => changeCareDate(today())
   );
 
-  $("dash-date").addEventListener("change", e =>
-    changeDashDate(e.target.value)
+  // HOJE - DASHBOARD
+
+  $("dash-today").addEventListener(
+    "click",
+    () => changeDashDate(today())
   );
 
-  $("login-cancel").addEventListener("click", closeLogin);
+  // DATA - LANCAMENTOS
 
-  $("login-form").addEventListener("submit", e => {
-    e.preventDefault();
-    loginFamily();
-  });
-
-  document.addEventListener("keydown", e => {
-    if (e.key === "Escape" && !$("login-modal").hidden) {
-      closeLogin();
+  $("care-date").addEventListener(
+    "change",
+    event => {
+      changeCareDate(
+        event.target.value
+      );
     }
-  });
+  );
 
-  $("login-modal").addEventListener("click", e => {
-    if (e.target === $("login-modal")) closeLogin();
-  });
+  // DATA - DASHBOARD
+
+  $("dash-date").addEventListener(
+    "change",
+    event => {
+      changeDashDate(
+        event.target.value
+      );
+    }
+  );
 }
 
-/* ==================================================
-   ATUALIZACAO AUTOMATICA
-================================================== */
+/* =====================================================
+   23. ATUALIZACAO AUTOMATICA
+
+ A cada 60 segundos.
+ Nunca interrompe a digitacao.
+===================================================== */
 
 function refreshVisibleScreen() {
-  if (document.hidden || state.busy) return;
+  if (
+    document.hidden ||
+    state.busy
+  ) return;
 
   checkMidnight();
 
-  if (state.screen === "dash") {
+  if (
+    state.screen === "dash"
+  ) {
     loadDashboard(true);
-  } else if (!hasDraft() && !isTyping()) {
+
+  } else if (
+    !hasDraft() &&
+    !isTyping()
+  ) {
     loadCare(true);
   }
 }
 
 function startAutoRefresh() {
-  setInterval(refreshVisibleScreen, CONFIG.REFRESH_MS);
+  setInterval(
+    refreshVisibleScreen,
+    CONFIG.REFRESH_MS
+  );
 
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) refreshVisibleScreen();
-  });
+  document.addEventListener(
+    "visibilitychange",
+    () => {
+      if (!document.hidden) {
+        refreshVisibleScreen();
+      }
+    }
+  );
 }
 
-/* ==================================================
-   INICIALIZACAO
-================================================== */
+/* =====================================================
+   24. INICIALIZACAO
+===================================================== */
 
 async function initialize() {
   state.careDate = today();
@@ -1359,11 +2106,15 @@ async function initialize() {
   showScreen("care");
   renderCare();
 
-  $("connection-alert").hidden = Boolean(CONFIG.API_URL);
+  $("connection-alert").hidden =
+    Boolean(CONFIG.API_URL);
 
   await loadCare();
 
   startAutoRefresh();
 }
 
-document.addEventListener("DOMContentLoaded", initialize);
+document.addEventListener(
+  "DOMContentLoaded",
+  initialize
+);
