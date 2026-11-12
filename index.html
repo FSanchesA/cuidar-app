@@ -9,8 +9,10 @@
 <meta name="apple-mobile-web-app-title" content="Cuidar">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="description" content="Acompanhamento diário de Georges e Ilma.">
+
 <link rel="apple-touch-icon" href="./apple-touch-icon.png">
 <link rel="icon" href="./apple-touch-icon.png">
+
 <title>Cuidar | Acompanhamento Diário</title>
 
 <style>
@@ -25,6 +27,7 @@
   --danger:#B73F48;
   --shadow:0 5px 20px rgba(25,65,45,.05);
 }
+
 body.ilma {
   --primary:#A34E73;
   --primary2:#C87797;
@@ -34,6 +37,7 @@ body.ilma {
   --text:#62384A;
   --muted:#9E7C8A;
 }
+
 body.dashboard-mode {
   --primary:#174C3C;
   --primary2:#28735C;
@@ -43,19 +47,39 @@ body.dashboard-mode {
   --text:#243C32;
   --muted:#74847C;
 }
-* {box-sizing:border-box}
+
+* {
+  box-sizing:border-box;
+}
+
 body {
   margin:0;
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
+  font-family:-apple-system,BlinkMacSystemFont,
+    "Segoe UI",Arial,sans-serif;
   background:var(--bg);
   color:var(--text);
   font-size:15px;
   -webkit-font-smoothing:antialiased;
 }
-button,input,select,textarea {font:inherit}
-button {cursor:pointer;-webkit-tap-highlight-color:transparent}
-button:disabled {opacity:.55;cursor:not-allowed}
-[hidden] {display:none!important}
+
+button,input,select,textarea {
+  font:inherit;
+}
+
+button {
+  cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+
+button:disabled {
+  opacity:.55;
+  cursor:not-allowed;
+}
+
+[hidden] {
+  display:none!important;
+}
+
 .app {
   width:100%;
   max-width:900px;
@@ -63,225 +87,443 @@ button:disabled {opacity:.55;cursor:not-allowed}
   margin:auto;
   padding-bottom:calc(30px + env(safe-area-inset-bottom));
 }
+
 header {
   background:white;
   padding:calc(20px + env(safe-area-inset-top)) 16px 16px;
   border-bottom:1px solid var(--border);
 }
-.brand {display:flex;align-items:center;gap:12px}
-.brand-icon {
-  width:47px;height:47px;
-  border-radius:15px;
-  display:grid;place-items:center;
-  background:var(--primary);
-  color:white;font-size:25px;
+
+/* ==================================================
+   LOGO PERSONALIZADO
+================================================== */
+
+.brand {
+  display:flex;
+  align-items:center;
+  gap:12px;
 }
+
+.brand-icon {
+  width:54px;
+  height:54px;
+  flex-shrink:0;
+  border-radius:15px;
+  overflow:hidden;
+  background:transparent;
+}
+
+.brand-logo {
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+  border-radius:15px;
+}
+
 .brand h1 {
   margin:0;
   color:var(--primary);
-  font-size:25px;letter-spacing:-.7px;
+  font-size:25px;
+  letter-spacing:-.7px;
 }
-.brand p {font-size:12px;color:var(--muted);margin:3px 0 0}
-.nav,.patient-nav {
+
+.brand p {
+  font-size:12px;
+  color:var(--muted);
+  margin:3px 0 0;
+}
+
+/* ==================================================
+   NAVEGACAO
+================================================== */
+
+.nav,
+.patient-nav {
   display:grid;
   grid-template-columns:1fr 1fr;
   gap:7px;
   padding:5px;
   border-radius:14px;
 }
-.nav {background:var(--soft);margin-top:18px}
-.patient-nav {background:#F0F0F0;margin-top:10px}
-.nav button,.patient-nav button {
-  background:transparent;border:0;
-  padding:13px 6px;border-radius:11px;
-  font-weight:750;color:var(--muted);
+
+.nav {
+  background:var(--soft);
+  margin-top:18px;
 }
-.nav button.active,.patient-nav button.active {
-  background:var(--primary);color:white;
+
+.patient-nav {
+  background:#F0F0F0;
+  margin-top:10px;
 }
-.patient-nav button:first-child:not(.active) {color:#174C3C}
-.patient-nav button:last-child:not(.active) {color:#A34E73}
-body.dashboard-mode .patient-nav {display:none}
-main {padding:17px 14px}
-h2 {font-size:20px;color:var(--primary);margin:0}
-h3 {font-size:16px;color:var(--primary);margin:0}
+
+.nav button,
+.patient-nav button {
+  background:transparent;
+  border:0;
+  padding:13px 6px;
+  border-radius:11px;
+  font-weight:750;
+  color:var(--muted);
+}
+
+.nav button.active,
+.patient-nav button.active {
+  background:var(--primary);
+  color:white;
+}
+
+.patient-nav button:first-child:not(.active) {
+  color:#174C3C;
+}
+
+.patient-nav button:last-child:not(.active) {
+  color:#A34E73;
+}
+
+body.dashboard-mode .patient-nav {
+  display:none;
+}
+
+main {
+  padding:17px 14px;
+}
+
+h2 {
+  font-size:20px;
+  color:var(--primary);
+  margin:0;
+}
+
+h3 {
+  font-size:16px;
+  color:var(--primary);
+  margin:0;
+}
+
 .subtitle {
-  font-size:12px;color:var(--muted);
-  line-height:1.5;margin:5px 0 0;
+  font-size:12px;
+  color:var(--muted);
+  line-height:1.5;
+  margin:5px 0 0;
 }
+
 .heading {
-  display:flex;align-items:center;
+  display:flex;
+  align-items:center;
   justify-content:space-between;
-  gap:10px;margin-bottom:14px;
+  gap:10px;
+  margin-bottom:14px;
 }
+
 .pill {
   background:var(--soft);
   color:var(--primary);
-  padding:7px 11px;border-radius:25px;
-  font-size:12px;font-weight:750;
+  padding:7px 11px;
+  border-radius:25px;
+  font-size:12px;
+  font-weight:750;
 }
-.datebar {display:flex;gap:9px;margin-bottom:16px}
-.datebar select {flex:1;min-width:0}
+
+.datebar {
+  display:flex;
+  gap:9px;
+  margin-bottom:16px;
+}
+
+.datebar select {
+  flex:1;
+  min-width:0;
+}
+
 .btn-today {
   padding:10px 17px;
-  background:white;color:var(--primary);
+  background:white;
+  color:var(--primary);
   border:1px solid var(--primary);
-  border-radius:12px;font-weight:750;
+  border-radius:12px;
+  font-weight:750;
 }
+
+/* ==================================================
+   CARDS E FORMULARIOS
+================================================== */
+
 .card {
   background:white;
   border:1px solid var(--border);
   border-radius:18px;
-  padding:17px;margin-bottom:13px;
+  padding:17px;
+  margin-bottom:13px;
   box-shadow:var(--shadow);
 }
+
 .card-head {
-  display:flex;justify-content:space-between;
-  align-items:center;gap:10px;margin-bottom:14px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  margin-bottom:14px;
 }
+
 .card-head p {
-  color:var(--muted);font-size:12px;margin:5px 0 0;
+  color:var(--muted);
+  font-size:12px;
+  margin:5px 0 0;
 }
+
 label {
   display:block;
-  font-size:12px;font-weight:750;
+  font-size:12px;
+  font-weight:750;
   margin:0 0 7px;
 }
-input,select,textarea {
-  display:block;width:100%;
+
+input,
+select,
+textarea {
+  display:block;
+  width:100%;
   min-height:46px;
   border:1px solid var(--border);
   border-radius:11px;
   background:#FCFDFC;
   color:var(--text);
   padding:11px 12px;
-  font-size:16px;outline:none;
+  font-size:16px;
+  outline:none;
 }
-textarea {min-height:77px;resize:vertical}
-input:focus,select:focus,textarea:focus {
+
+textarea {
+  min-height:77px;
+  resize:vertical;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
   border-color:var(--primary2);
   box-shadow:0 0 0 3px var(--soft);
 }
+
 .form-grid {
-  display:grid;grid-template-columns:1fr 1fr;gap:12px;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
 }
+
 .actions {
-  display:flex;align-items:center;
-  gap:9px;flex-wrap:wrap;margin-top:12px;
+  display:flex;
+  align-items:center;
+  gap:9px;
+  flex-wrap:wrap;
+  margin-top:12px;
 }
+
 .btn-primary {
-  border:0;border-radius:11px;
-  background:var(--primary);color:white;
-  padding:12px 16px;min-height:44px;
+  border:0;
+  border-radius:11px;
+  background:var(--primary);
+  color:white;
+  padding:12px 16px;
+  min-height:44px;
   font-weight:750;
 }
+
 .btn-secondary {
   border:1px solid var(--border);
-  background:white;color:var(--primary);
-  padding:11px 14px;border-radius:11px;
+  background:white;
+  color:var(--primary);
+  padding:11px 14px;
+  border-radius:11px;
   font-weight:750;
 }
+
+/* ==================================================
+   ALIMENTACAO
+================================================== */
+
 .meal {
   border:1px solid var(--border);
   border-radius:15px;
-  padding:14px;margin-bottom:12px;
+  padding:14px;
+  margin-bottom:12px;
   background:white;
 }
-.meal:last-child {margin-bottom:0}
-.meal-title {
-  font-size:14px;font-weight:800;
-  color:var(--primary);margin:0 0 11px;
+
+.meal:last-child {
+  margin-bottom:0;
 }
+
+.meal-title {
+  font-size:14px;
+  font-weight:800;
+  color:var(--primary);
+  margin:0 0 11px;
+}
+
 .meal-done {
   background:var(--soft);
-  border-radius:11px;padding:13px;
+  border-radius:11px;
+  padding:13px;
 }
-.done-title {font-size:13px;font-weight:800;color:var(--primary)}
+
+.done-title {
+  font-size:13px;
+  font-weight:800;
+  color:var(--primary);
+}
+
 .meal-done p {
-  font-size:13px;margin:8px 0;
-  white-space:pre-wrap;overflow-wrap:anywhere;
+  font-size:13px;
+  margin:8px 0;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
 }
+
+/* ==================================================
+   REGISTROS
+================================================== */
+
 .small {
-  font-size:11px;color:var(--muted);
-  line-height:1.5;margin-top:5px;
+  font-size:11px;
+  color:var(--muted);
+  line-height:1.5;
+  margin-top:5px;
 }
+
 .record {
-  display:flex;align-items:flex-start;
-  justify-content:space-between;gap:10px;
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
   padding:12px 0;
   border-bottom:1px solid var(--border);
 }
-.record:last-child {border-bottom:0}
-.record-content {
-  flex:1;min-width:0;overflow-wrap:anywhere;
-}
-.record-content strong {
-  display:block;font-size:13px;margin-bottom:4px;
-}
-.record-content p {
-  font-size:13px;line-height:1.5;
-  white-space:pre-wrap;margin:4px 0;
-}
-.delete {
-  flex-shrink:0;
-  width:35px;height:35px;
-  border:0;border-radius:10px;
-  background:#FFF0F0;color:#B73F48;
-  font-size:21px;font-weight:700;
-}
-.empty {color:var(--muted);font-size:12px;padding:10px 0}
-.section-label {
-  font-size:12px;font-weight:800;
-  color:var(--primary);margin:16px 0 7px;
-}
-.water-total {
-  font-size:34px;font-weight:800;
-  color:var(--primary);margin:4px 0 15px;
-}
-.water-total span {
-  font-size:13px;color:var(--muted);font-weight:400;
-}
-.notice {
-  padding:12px;border-radius:12px;
-  background:#FFF6E5;border:1px solid #EEDCB2;
-  font-size:12px;line-height:1.5;
-  color:#775B2F;margin-bottom:14px;
+
+.record:last-child {
+  border-bottom:0;
 }
 
-/* DASHBOARD COMPARATIVO */
+.record-content {
+  flex:1;
+  min-width:0;
+  overflow-wrap:anywhere;
+}
+
+.record-content strong {
+  display:block;
+  font-size:13px;
+  margin-bottom:4px;
+}
+
+.record-content p {
+  font-size:13px;
+  line-height:1.5;
+  white-space:pre-wrap;
+  margin:4px 0;
+}
+
+.delete {
+  flex-shrink:0;
+  width:35px;
+  height:35px;
+  border:0;
+  border-radius:10px;
+  background:#FFF0F0;
+  color:#B73F48;
+  font-size:21px;
+  font-weight:700;
+}
+
+.empty {
+  color:var(--muted);
+  font-size:12px;
+  padding:10px 0;
+}
+
+.section-label {
+  font-size:12px;
+  font-weight:800;
+  color:var(--primary);
+  margin:16px 0 7px;
+}
+
+.water-total {
+  font-size:34px;
+  font-weight:800;
+  color:var(--primary);
+  margin:4px 0 15px;
+}
+
+.water-total span {
+  font-size:13px;
+  color:var(--muted);
+  font-weight:400;
+}
+
+.notice {
+  padding:12px;
+  border-radius:12px;
+  background:#FFF6E5;
+  border:1px solid #EEDCB2;
+  font-size:12px;
+  line-height:1.5;
+  color:#775B2F;
+  margin-bottom:14px;
+}
+
+/* ==================================================
+   DASHBOARD COMPARATIVO
+================================================== */
+
 .dashboard-intro {
   background:white;
   border:1px solid #E1E8E2;
   border-radius:15px;
-  padding:14px;margin-bottom:14px;
+  padding:14px;
+  margin-bottom:14px;
 }
-.dashboard-intro strong {font-size:14px;color:#174C3C}
+
+.dashboard-intro strong {
+  font-size:14px;
+  color:#174C3C;
+}
+
 .dashboard-intro p {
-  color:#718178;font-size:12px;
-  margin:6px 0 0;line-height:1.5;
+  color:#718178;
+  font-size:12px;
+  margin:6px 0 0;
+  line-height:1.5;
 }
+
 .comparison {
   display:grid;
   grid-template-columns:minmax(0,1fr) minmax(0,1fr);
-  gap:10px;align-items:start;
+  gap:10px;
+  align-items:start;
 }
+
 .patient-column {
   min-width:0;
   border-radius:17px;
   padding:9px;
 }
+
 .column-georges {
   background:#EAF5EF;
   border:1px solid #D4E8DC;
   --column:#174C3C;
   --column-muted:#57776A;
 }
+
 .column-ilma {
   background:#FDEAF1;
   border:1px solid #F1D6E1;
   --column:#A34E73;
   --column-muted:#A57E8F;
 }
+
 .patient-heading {
   border-radius:12px;
   background:var(--column);
@@ -293,6 +535,7 @@ input:focus,select:focus,textarea:focus {
   letter-spacing:.3px;
   margin-bottom:10px;
 }
+
 .patient-summary {
   font-size:11px;
   color:var(--column-muted);
@@ -300,6 +543,7 @@ input:focus,select:focus,textarea:focus {
   margin-bottom:10px;
   min-height:15px;
 }
+
 .comp-metric {
   border-radius:12px;
   padding:12px;
@@ -307,11 +551,13 @@ input:focus,select:focus,textarea:focus {
   margin-bottom:8px;
   min-width:0;
 }
+
 .comp-label {
   font-size:11px;
   color:var(--column-muted);
   line-height:1.3;
 }
+
 .comp-value {
   margin-top:7px;
   font-size:24px;
@@ -320,11 +566,13 @@ input:focus,select:focus,textarea:focus {
   font-weight:850;
   overflow-wrap:anywhere;
 }
+
 .comp-unit {
   font-size:10px;
   color:var(--column-muted);
   margin-top:5px;
 }
+
 .comp-progress {
   height:6px;
   border-radius:20px;
@@ -332,10 +580,13 @@ input:focus,select:focus,textarea:focus {
   margin-top:9px;
   overflow:hidden;
 }
+
 .comp-progress div {
-  height:100%;background:var(--column);
+  height:100%;
+  background:var(--column);
   width:0;
 }
+
 .comp-section {
   background:white;
   border:1px solid rgba(30,60,50,.06);
@@ -344,6 +595,7 @@ input:focus,select:focus,textarea:focus {
   margin-top:10px;
   min-width:0;
 }
+
 .comp-section h3 {
   font-size:13px;
   color:var(--column);
@@ -351,107 +603,220 @@ input:focus,select:focus,textarea:focus {
   border-bottom:1px solid #EDF0EE;
   margin:0 0 9px;
 }
+
 .comp-record {
   padding:9px 0;
   border-bottom:1px solid #F0F1F0;
   overflow-wrap:anywhere;
 }
-.comp-record:last-child {border-bottom:0}
+
+.comp-record:last-child {
+  border-bottom:0;
+}
+
 .comp-record strong {
-  display:block;font-size:12px;
-  color:#35483D;margin-bottom:5px;
+  display:block;
+  font-size:12px;
+  color:#35483D;
+  margin-bottom:5px;
 }
+
 .comp-record p {
-  margin:0 0 4px;font-size:12px;
-  line-height:1.5;color:#46564E;
-  white-space:pre-wrap;overflow-wrap:anywhere;
+  margin:0 0 4px;
+  font-size:12px;
+  line-height:1.5;
+  color:#46564E;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
 }
-.comp-record .small {font-size:10px}
+
+.comp-record .small {
+  font-size:10px;
+}
+
 .comp-empty {
-  color:#8A9790;font-size:11px;
-  padding:8px 0;line-height:1.5;
+  color:#8A9790;
+  font-size:11px;
+  padding:8px 0;
+  line-height:1.5;
 }
+
 .comp-timeline {
   border-left:2px solid var(--column);
   margin:10px 0 0 5px;
   padding:0 0 14px 12px;
   position:relative;
 }
+
 .comp-timeline:before {
   content:"";
   position:absolute;
-  width:7px;height:7px;
+  width:7px;
+  height:7px;
   background:var(--column);
   border-radius:50%;
-  left:-4.5px;top:4px;
+  left:-4.5px;
+  top:4px;
 }
+
 .comp-timeline strong {
-  font-size:11px;display:block;
+  font-size:11px;
+  display:block;
   margin:4px 0;
 }
+
 .comp-timeline p {
-  font-size:11px;line-height:1.5;
-  margin:0;overflow-wrap:anywhere;
+  font-size:11px;
+  line-height:1.5;
+  margin:0;
+  overflow-wrap:anywhere;
   white-space:pre-wrap;
 }
+
+/* ==================================================
+   LOGIN E NOTIFICACOES
+================================================== */
+
 .dash-loading {
-  padding:12px;text-align:center;
-  font-size:12px;color:#718178;
+  padding:12px;
+  text-align:center;
+  font-size:12px;
+  color:#718178;
 }
+
 .modal-bg {
-  position:fixed;inset:0;
+  position:fixed;
+  inset:0;
   background:rgba(12,29,22,.60);
-  display:grid;place-items:center;
-  z-index:100;padding:20px;
+  display:grid;
+  place-items:center;
+  z-index:100;
+  padding:20px;
 }
+
 .modal {
-  width:100%;max-width:390px;
-  background:white;padding:24px;
+  width:100%;
+  max-width:390px;
+  background:white;
+  padding:24px;
   border-radius:22px;
   box-shadow:0 15px 55px #0003;
 }
-.modal h2 {margin-bottom:8px}
+
+.modal h2 {
+  margin-bottom:8px;
+}
+
 .modal p {
-  font-size:13px;color:var(--muted);
+  font-size:13px;
+  color:var(--muted);
   line-height:1.5;
 }
+
 .toast {
-  position:fixed;z-index:200;
+  position:fixed;
+  z-index:200;
   bottom:calc(20px + env(safe-area-inset-bottom));
-  left:50%;transform:translateX(-50%);
+  left:50%;
+  transform:translateX(-50%);
   width:min(92%,430px);
   text-align:center;
-  background:#174C3C;color:white;
-  padding:14px;border-radius:13px;
+  background:#174C3C;
+  color:white;
+  padding:14px;
+  border-radius:13px;
   box-shadow:0 8px 25px #0002;
   font-size:13px;
 }
-.toast.error {background:#B73F48}
-.footer {
-  text-align:center;color:#91A099;
-  font-size:11px;padding:22px 10px;
+
+.toast.error {
+  background:#B73F48;
 }
+
+.footer {
+  text-align:center;
+  color:#91A099;
+  font-size:11px;
+  padding:22px 10px;
+}
+
+/* ==================================================
+   RESPONSIVIDADE IPHONE
+================================================== */
+
 @media(max-width:480px) {
-  header {padding-left:12px;padding-right:12px}
-  main {padding:14px 10px}
-  .card {padding:14px}
-  .form-grid {grid-template-columns:1fr}
-  .comparison {gap:7px}
-  .patient-column {padding:6px;border-radius:14px}
-  .patient-heading {font-size:13px;padding:12px 5px}
-  .comp-metric {padding:10px}
-  .comp-value {font-size:21px}
-  .comp-section {padding:9px}
-  .comp-section h3 {font-size:12px}
-  .comp-record p {font-size:11px}
+  header {
+    padding-left:12px;
+    padding-right:12px;
+  }
+
+  main {
+    padding:14px 10px;
+  }
+
+  .card {
+    padding:14px;
+  }
+
+  .form-grid {
+    grid-template-columns:1fr;
+  }
+
+  .comparison {
+    gap:7px;
+  }
+
+  .patient-column {
+    padding:6px;
+    border-radius:14px;
+  }
+
+  .patient-heading {
+    font-size:13px;
+    padding:12px 5px;
+  }
+
+  .comp-metric {
+    padding:10px;
+  }
+
+  .comp-value {
+    font-size:21px;
+  }
+
+  .comp-section {
+    padding:9px;
+  }
+
+  .comp-section h3 {
+    font-size:12px;
+  }
+
+  .comp-record p {
+    font-size:11px;
+  }
 }
 </style>
 </head>
+
 <body class="georges">
+
 <div class="app">
+
 <header>
+
+  <!-- LOGO PERSONALIZADO DO CUIDAR -->
   <div class="brand">
-    <div class="brand-icon">♥</div>
+    <div class="brand-icon">
+      <img
+        src="./apple-touch-icon.png"
+        alt="Cuidar"
+        class="brand-logo"
+        width="54"
+        height="54"
+      >
+    </div>
+
     <div>
       <h1>Cuidar</h1>
       <p>Acompanhamento diário com carinho</p>
@@ -459,28 +824,47 @@ input:focus,select:focus,textarea:focus {
   </div>
 
   <nav class="nav" aria-label="Navegação principal">
-    <button type="button" id="nav-care" class="active">Lançamentos</button>
-    <button type="button" id="nav-dash">Dashboard</button>
+    <button type="button" id="nav-care" class="active">
+      Lançamentos
+    </button>
+    <button type="button" id="nav-dash">
+      Dashboard
+    </button>
   </nav>
 
   <nav class="patient-nav" aria-label="Selecionar idoso">
-    <button type="button" id="patient-georges" class="active">GEORGES</button>
-    <button type="button" id="patient-ilma">ILMA</button>
+    <button type="button" id="patient-georges" class="active">
+      GEORGES
+    </button>
+    <button type="button" id="patient-ilma">
+      ILMA
+    </button>
   </nav>
+
 </header>
 
 <main>
+
+<!-- ==================================================
+     TELA DE LANCAMENTOS
+================================================== -->
+
 <section id="screen-care">
+
   <div class="heading">
     <div>
       <h2 id="care-title">Cuidados de Georges</h2>
       <p class="subtitle">Registro diário dos cuidados.</p>
     </div>
+
     <span class="pill" id="care-tag">Hoje</span>
   </div>
 
   <div class="datebar">
-    <button type="button" id="care-today" class="btn-today">Hoje</button>
+    <button type="button" id="care-today" class="btn-today">
+      Hoje
+    </button>
+
     <select id="care-date" aria-label="Data dos cuidados"></select>
   </div>
 
@@ -489,17 +873,21 @@ input:focus,select:focus,textarea:focus {
     salvos quando o aplicativo estiver conectado ao Google Sheets.
   </div>
 
+  <!-- ALIMENTACAO -->
   <article class="card">
     <div class="card-head">
       <div>
         <h3>Alimentação</h3>
         <p>Café da manhã, almoço, jantar e lanches.</p>
       </div>
+
       <span id="meal-counter" class="pill">0 de 3</span>
     </div>
+
     <div id="meals-container"></div>
   </article>
 
+  <!-- AGUA -->
   <article class="card">
     <div class="card-head">
       <div>
@@ -507,25 +895,40 @@ input:focus,select:focus,textarea:focus {
         <p>Registre cada quantidade ingerida.</p>
       </div>
     </div>
+
     <div class="water-total">
-      <span id="water-total">0</span> <span>mL no dia</span>
+      <span id="water-total">0</span>
+      <span>mL no dia</span>
     </div>
+
     <form id="water-form">
       <div class="form-grid">
         <div>
           <label for="water-value">Quantidade (mL)</label>
-          <input id="water-value" type="text" inputmode="numeric"
-            maxlength="3" pattern="[0-9]{1,3}"
-            placeholder="Ex.: 200" required>
+
+          <input
+            id="water-value"
+            type="text"
+            inputmode="numeric"
+            maxlength="3"
+            pattern="[0-9]{1,3}"
+            placeholder="Ex.: 200"
+            required
+          >
         </div>
+
         <div class="actions">
-          <button type="submit" class="btn-primary">+ Adicionar água</button>
+          <button type="submit" class="btn-primary">
+            + Adicionar água
+          </button>
         </div>
       </div>
     </form>
+
     <div id="water-records"></div>
   </article>
 
+  <!-- MEDICACOES -->
   <article class="card">
     <div class="card-head">
       <div>
@@ -533,17 +936,30 @@ input:focus,select:focus,textarea:focus {
         <p>Registre cada administração.</p>
       </div>
     </div>
+
     <form id="medication-form">
-      <label for="medication-value">Medicação administrada</label>
-      <textarea id="medication-value" required maxlength="1000"
-        placeholder="Medicamento, dose e via de administração"></textarea>
+      <label for="medication-value">
+        Medicação administrada
+      </label>
+
+      <textarea
+        id="medication-value"
+        required
+        maxlength="1000"
+        placeholder="Medicamento, dose e via de administração"
+      ></textarea>
+
       <div class="actions">
-        <button type="submit" class="btn-primary">+ Registrar medicação</button>
+        <button type="submit" class="btn-primary">
+          + Registrar medicação
+        </button>
       </div>
     </form>
+
     <div id="medication-records"></div>
   </article>
 
+  <!-- SINAIS VITAIS -->
   <article class="card">
     <div class="card-head">
       <div>
@@ -551,30 +967,45 @@ input:focus,select:focus,textarea:focus {
         <p>Registre pressão, glicemia ou temperatura.</p>
       </div>
     </div>
+
     <form id="vital-form">
       <div class="form-grid">
+
         <div>
           <label for="vital-type">Aferição</label>
+
           <select id="vital-type">
             <option value="pressao">Pressão arterial</option>
             <option value="glicemia">Glicemia</option>
             <option value="temperatura">Temperatura</option>
           </select>
         </div>
+
         <div>
           <label for="vital-value" id="vital-label">
             Pressão arterial (mmHg)
           </label>
-          <input id="vital-value" placeholder="Ex.: 120/80" required>
+
+          <input
+            id="vital-value"
+            placeholder="Ex.: 120/80"
+            required
+          >
         </div>
+
       </div>
+
       <div class="actions">
-        <button type="submit" class="btn-primary">+ Registrar aferição</button>
+        <button type="submit" class="btn-primary">
+          + Registrar aferição
+        </button>
       </div>
     </form>
+
     <div id="vital-records"></div>
   </article>
 
+  <!-- HIGIENE E ELIMINACOES -->
   <article class="card">
     <div class="card-head">
       <div>
@@ -582,10 +1013,13 @@ input:focus,select:focus,textarea:focus {
         <p>Banho, higiene bucal, urina e evacuação.</p>
       </div>
     </div>
+
     <form id="hygiene-form">
       <div class="form-grid">
+
         <div>
           <label for="hygiene-type">Atividade</label>
+
           <select id="hygiene-type">
             <option value="banho">Banho</option>
             <option value="higiene_bucal">Higiene bucal</option>
@@ -593,19 +1027,32 @@ input:focus,select:focus,textarea:focus {
             <option value="evacuacao">Evacuação</option>
           </select>
         </div>
+
         <div>
-          <label for="hygiene-note">Observação (opcional)</label>
-          <input id="hygiene-note" maxlength="500"
-            placeholder="Ex.: Sem alterações">
+          <label for="hygiene-note">
+            Observação (opcional)
+          </label>
+
+          <input
+            id="hygiene-note"
+            maxlength="500"
+            placeholder="Ex.: Sem alterações"
+          >
         </div>
+
       </div>
+
       <div class="actions">
-        <button type="submit" class="btn-primary">+ Registrar atividade</button>
+        <button type="submit" class="btn-primary">
+          + Registrar atividade
+        </button>
       </div>
     </form>
+
     <div id="hygiene-records"></div>
   </article>
 
+  <!-- CONSULTAS -->
   <article class="card">
     <div class="card-head">
       <div>
@@ -613,17 +1060,28 @@ input:focus,select:focus,textarea:focus {
         <p>Inclua orientações e observações.</p>
       </div>
     </div>
+
     <form id="consultation-form">
       <label for="consultation-value">Descrição</label>
-      <textarea id="consultation-value" required maxlength="2000"
-        placeholder="Especialidade, profissional e orientações"></textarea>
+
+      <textarea
+        id="consultation-value"
+        required
+        maxlength="2000"
+        placeholder="Especialidade, profissional e orientações"
+      ></textarea>
+
       <div class="actions">
-        <button type="submit" class="btn-primary">+ Registrar consulta</button>
+        <button type="submit" class="btn-primary">
+          + Registrar consulta
+        </button>
       </div>
     </form>
+
     <div id="consultation-records"></div>
   </article>
 
+  <!-- EXAMES -->
   <article class="card">
     <div class="card-head">
       <div>
@@ -631,17 +1089,28 @@ input:focus,select:focus,textarea:focus {
         <p>Registre os exames e informações relevantes.</p>
       </div>
     </div>
+
     <form id="exam-form">
       <label for="exam-value">Descrição do exame</label>
-      <textarea id="exam-value" required maxlength="2000"
-        placeholder="Exame realizado e observações"></textarea>
+
+      <textarea
+        id="exam-value"
+        required
+        maxlength="2000"
+        placeholder="Exame realizado e observações"
+      ></textarea>
+
       <div class="actions">
-        <button type="submit" class="btn-primary">+ Registrar exame</button>
+        <button type="submit" class="btn-primary">
+          + Registrar exame
+        </button>
       </div>
     </form>
+
     <div id="exam-records"></div>
   </article>
 
+  <!-- OCORRENCIAS -->
   <article class="card">
     <div class="card-head">
       <div>
@@ -649,82 +1118,201 @@ input:focus,select:focus,textarea:focus {
         <p>Registre acontecimentos relevantes.</p>
       </div>
     </div>
+
     <form id="occurrence-form">
-      <label for="occurrence-value">O que aconteceu?</label>
-      <textarea id="occurrence-value" required maxlength="2000"
-        placeholder="Ex.: Recusou a comida, dormiu mal, apresentou desconforto..."></textarea>
+      <label for="occurrence-value">
+        O que aconteceu?
+      </label>
+
+      <textarea
+        id="occurrence-value"
+        required
+        maxlength="2000"
+        placeholder="Ex.: Recusou a comida, dormiu mal, apresentou desconforto..."
+      ></textarea>
+
       <div class="actions">
-        <button type="submit" class="btn-primary">+ Registrar ocorrência</button>
+        <button type="submit" class="btn-primary">
+          + Registrar ocorrência
+        </button>
       </div>
     </form>
+
     <div id="occurrence-records"></div>
   </article>
+
 </section>
 
+<!-- ==================================================
+     DASHBOARD COMPARATIVO
+================================================== -->
+
 <section id="screen-dash" hidden>
+
   <div class="heading">
     <div>
       <h2>Dashboard da Família</h2>
-      <p class="subtitle">Georges e Ilma, lado a lado.</p>
+      <p class="subtitle">
+        Georges e Ilma, lado a lado.
+      </p>
     </div>
-    <button id="dash-logout" type="button" class="btn-secondary">Sair</button>
+
+    <button
+      id="dash-logout"
+      type="button"
+      class="btn-secondary"
+    >
+      Sair
+    </button>
   </div>
 
   <div class="datebar">
-    <button type="button" id="dash-today" class="btn-today">Hoje</button>
-    <select id="dash-date" aria-label="Selecionar data do dashboard"></select>
+    <button
+      type="button"
+      id="dash-today"
+      class="btn-today"
+    >
+      Hoje
+    </button>
+
+    <select
+      id="dash-date"
+      aria-label="Selecionar data do dashboard"
+    ></select>
   </div>
 
   <div class="dashboard-intro">
-    <strong id="dash-day">Resumo do dia</strong>
+    <strong id="dash-day">
+      Resumo do dia
+    </strong>
+
     <p id="dash-subtitle">
       Acompanhamento comparativo dos cuidados registrados.
     </p>
   </div>
 
-  <div id="dash-loading" class="dash-loading" hidden>
+  <div
+    id="dash-loading"
+    class="dash-loading"
+    hidden
+  >
     Atualizando Georges e Ilma...
   </div>
 
   <div class="comparison">
-    <div id="column-georges" class="patient-column column-georges">
-      <div class="patient-heading">GEORGES</div>
-      <div id="summary-georges" class="patient-summary">Carregando...</div>
+
+    <!-- COLUNA GEORGES -->
+    <div
+      id="column-georges"
+      class="patient-column column-georges"
+    >
+      <div class="patient-heading">
+        GEORGES
+      </div>
+
+      <div
+        id="summary-georges"
+        class="patient-summary"
+      >
+        Carregando...
+      </div>
+
       <div id="dashboard-georges"></div>
     </div>
 
-    <div id="column-ilma" class="patient-column column-ilma">
-      <div class="patient-heading">ILMA</div>
-      <div id="summary-ilma" class="patient-summary">Carregando...</div>
+    <!-- COLUNA ILMA -->
+    <div
+      id="column-ilma"
+      class="patient-column column-ilma"
+    >
+      <div class="patient-heading">
+        ILMA
+      </div>
+
+      <div
+        id="summary-ilma"
+        class="patient-summary"
+      >
+        Carregando...
+      </div>
+
       <div id="dashboard-ilma"></div>
     </div>
+
   </div>
+
 </section>
 
-<div class="footer">Cuidar · Georges &amp; Ilma</div>
-</main>
+<div class="footer">
+  Cuidar · Georges &amp; Ilma
 </div>
 
+</main>
+
+</div>
+
+<!-- ==================================================
+     MODAL DE ACESSO DA FAMILIA
+================================================== -->
+
 <div id="login-modal" class="modal-bg" hidden>
-  <div class="modal" role="dialog" aria-modal="true"
-    aria-labelledby="login-heading">
-    <h2 id="login-heading">Acesso da família</h2>
-    <p>Insira sua senha para acessar o Dashboard.</p>
+  <div
+    class="modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="login-heading"
+  >
+    <h2 id="login-heading">
+      Acesso da família
+    </h2>
+
+    <p>
+      Insira sua senha para acessar o Dashboard.
+    </p>
+
     <form id="login-form">
-      <label for="family-password">Senha</label>
-      <input id="family-password" type="password"
-        autocomplete="off" required>
+      <label for="family-password">
+        Senha
+      </label>
+
+      <input
+        id="family-password"
+        type="password"
+        autocomplete="off"
+        required
+      >
+
       <div class="actions">
-        <button type="submit" class="btn-primary">Entrar</button>
-        <button id="login-cancel" type="button"
-          class="btn-secondary">Cancelar</button>
+        <button
+          type="submit"
+          class="btn-primary"
+        >
+          Entrar
+        </button>
+
+        <button
+          id="login-cancel"
+          type="button"
+          class="btn-secondary"
+        >
+          Cancelar
+        </button>
       </div>
     </form>
   </div>
 </div>
 
-<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<!-- NOTIFICACOES -->
+<div
+  id="toast"
+  class="toast"
+  role="status"
+  aria-live="polite"
+  hidden
+></div>
 
-<script src="./main.js?v=20261111-6"></script>
+<!-- MAIN.JS - VERSAO ATUAL -->
+<script src="./main.js?v=20261111-7"></script>
+
 </body>
 </html>
