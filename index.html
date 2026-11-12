@@ -2,957 +2,955 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport"
-    content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#174C3C">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style"
-    content="default">
-  <meta name="apple-mobile-web-app-title" content="Cuidar">
-  <meta name="description"
-    content="Diario de cuidados e acompanhamento familiar.">
-
-  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-  <link rel="icon" href="./icon-192.png">
-
-  <title>Cuidar | Acompanhamento Diário</title>
-
-  <style>
-    :root {
-      --verde: #174C3C;
-      --verde2: #23745A;
-      --menta: #E9F4EF;
-      --fundo: #F5F7F5;
-      --branco: #FFFFFF;
-      --texto: #20352D;
-      --cinza: #6F7D76;
-      --borda: #E0E9E3;
-      --laranja: #EAA15B;
-      --vermelho: #B83D3D;
-      --sombra: 0 6px 22px rgba(16, 58, 43, .055);
-    }
-
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      background: var(--fundo);
-      color: var(--texto);
-      font-family: -apple-system, BlinkMacSystemFont,
-        "Segoe UI", Arial, sans-serif;
-      font-size: 15px;
-      -webkit-font-smoothing: antialiased;
-    }
-
-    button, input, select, textarea {
-      font: inherit;
-    }
-
-    button {
-      cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    button:disabled {
-      opacity: .55;
-      cursor: not-allowed;
-    }
-
-    .app {
-      max-width: 900px;
-      min-height: 100vh;
-      margin: auto;
-      padding-bottom: calc(35px + env(safe-area-inset-bottom));
-    }
-
-    header {
-      background: var(--branco);
-      padding: calc(21px + env(safe-area-inset-top)) 20px 15px;
-      border-bottom: 1px solid var(--borda);
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .brand-icon {
-      width: 47px;
-      height: 47px;
-      background: var(--verde);
-      color: white;
-      border-radius: 15px;
-      display: grid;
-      place-items: center;
-      font-size: 25px;
-      font-weight: 700;
-    }
-
-    .brand h1 {
-      font-size: 25px;
-      margin: 0;
-      letter-spacing: -.7px;
-      color: var(--verde);
-    }
-
-    .brand p {
-      font-size: 12px;
-      color: var(--cinza);
-      margin: 3px 0 0;
-    }
-
-    .nav {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin-top: 19px;
-      padding: 5px;
-      border-radius: 14px;
-      background: #EFF3F0;
-    }
-
-    .nav button {
-      border: 0;
-      border-radius: 11px;
-      padding: 13px 5px;
-      background: transparent;
-      font-weight: 700;
-      color: var(--cinza);
-    }
-
-    .nav button.active {
-      background: var(--verde);
-      color: white;
-      box-shadow: var(--sombra);
-    }
-
-    main { padding: 19px 16px; }
-
-    .page-heading {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 14px;
-    }
-
-    .page-heading h2 {
-      font-size: 20px;
-      margin: 0;
-      color: var(--verde);
-    }
-
-    .muted {
-      color: var(--cinza);
-      font-size: 12px;
-      line-height: 1.5;
-    }
-
-    .datebar {
-      display: flex;
-      gap: 9px;
-      margin-bottom: 18px;
-    }
-
-    .datebar select {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .btn-today {
-      border: 1px solid var(--verde);
-      color: var(--verde);
-      background: white;
-      padding: 12px 18px;
-      border-radius: 12px;
-      font-weight: 700;
-    }
-
-    .card {
-      background: white;
-      border: 1px solid var(--borda);
-      border-radius: 19px;
-      padding: 17px;
-      margin-bottom: 13px;
-      box-shadow: var(--sombra);
-    }
-
-    .card-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 12px;
-    }
-
-    .card-title {
-      font-size: 16px;
-      color: var(--verde);
-      font-weight: 800;
-      margin: 0;
-    }
-
-    .card-sub {
-      font-size: 12px;
-      color: var(--cinza);
-      margin: 4px 0 0;
-    }
-
-    .form-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 11px;
-    }
-
-    .full { grid-column: 1 / -1; }
-
-    label {
-      display: block;
-      font-size: 12px;
-      font-weight: 700;
-      color: #496157;
-      margin-bottom: 6px;
-    }
-
-    input, select, textarea {
-      width: 100%;
-      min-height: 46px;
-      border: 1px solid #D8E3DC;
-      border-radius: 11px;
-      background: #FCFDFC;
-      color: var(--texto);
-      padding: 11px 12px;
-      outline: none;
-      font-size: 16px;
-    }
-
-    input:focus, select:focus, textarea:focus {
-      border-color: var(--verde2);
-      box-shadow: 0 0 0 3px #DDEFE5;
-    }
-
-    textarea {
-      min-height: 78px;
-      resize: vertical;
-    }
-
-    .btn-primary {
-      border: 0;
-      background: var(--verde);
-      color: white;
-      border-radius: 12px;
-      min-height: 44px;
-      padding: 11px 16px;
-      font-weight: 700;
-    }
-
-    .btn-secondary {
-      background: white;
-      border: 1px solid var(--borda);
-      color: var(--verde);
-      border-radius: 11px;
-      padding: 10px 13px;
-      font-weight: 700;
-    }
-
-    .btn-cancel {
-      border: 0;
-      background: #EDF2EE;
-      color: var(--verde);
-      border-radius: 11px;
-      padding: 10px 13px;
-      font-weight: 700;
-    }
-
-    .form-actions {
-      display: flex;
-      gap: 9px;
-      align-items: center;
-      margin-top: 12px;
-      flex-wrap: wrap;
-    }
-
-    .record {
-      display: flex;
-      gap: 9px;
-      align-items: flex-start;
-      justify-content: space-between;
-      border-top: 1px solid #EDF1EE;
-      padding: 12px 0;
-    }
-
-    .record:first-child { border-top: 0; }
-
-    .record-main {
-      flex: 1;
-      min-width: 0;
-      overflow-wrap: anywhere;
-    }
-
-    .record-main strong {
-      display: block;
-      font-size: 13px;
-      margin-bottom: 4px;
-    }
-
-    .record-main p {
-      margin: 3px 0;
-      font-size: 13px;
-      line-height: 1.5;
-      white-space: pre-wrap;
-    }
-
-    .record-time {
-      font-size: 11px;
-      color: var(--cinza);
-    }
-
-    .btn-delete {
-      border: 0;
-      background: #FFF0F0;
-      color: var(--vermelho);
-      width: 34px;
-      height: 34px;
-      min-width: 34px;
-      border-radius: 10px;
-      font-size: 19px;
-      font-weight: 700;
-    }
-
-    .meal-status {
-      background: var(--menta);
-      color: var(--verde);
-      border-radius: 12px;
-      padding: 13px;
-    }
-
-    .meal-status strong {
-      display: block;
-      margin-bottom: 6px;
-      font-size: 13px;
-    }
-
-    .meal-status p {
-      margin: 0 0 8px;
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-    }
-
-    .section-title {
-      font-size: 13px;
-      font-weight: 800;
-      color: var(--verde);
-      margin: 17px 0 8px;
-    }
-
-    .empty {
-      color: #87948D;
-      font-size: 12px;
-      padding: 12px 0;
-    }
-
-    .pill {
-      display: inline-block;
-      background: var(--menta);
-      color: var(--verde);
-      border-radius: 99px;
-      font-size: 11px;
-      font-weight: 800;
-      padding: 6px 10px;
-    }
-
-    .pill-warn {
-      background: #FFF0D9;
-      color: #986016;
-    }
-
-    .total-water {
-      display: flex;
-      align-items: baseline;
-      gap: 6px;
-      color: var(--verde);
-      margin: 5px 0 14px;
-    }
-
-    .total-water strong {
-      font-size: 34px;
-      letter-spacing: -1px;
-    }
-
-    .total-water span { color: var(--cinza); }
-
-    .metrics {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 11px;
-      margin-bottom: 13px;
-    }
-
-    .metric {
-      background: white;
-      border: 1px solid var(--borda);
-      border-radius: 16px;
-      padding: 15px;
-    }
-
-    .metric-label {
-      font-size: 12px;
-      color: var(--cinza);
-      margin-bottom: 10px;
-    }
-
-    .metric-value {
-      font-size: 26px;
-      font-weight: 800;
-      color: var(--verde);
-    }
-
-    .metric-unit {
-      font-size: 12px;
-      color: var(--cinza);
-      margin-top: 5px;
-    }
-
-    .progress {
-      background: #E7EFEA;
-      height: 7px;
-      border-radius: 99px;
-      overflow: hidden;
-      margin-top: 10px;
-    }
-
-    .progress > div {
-      height: 100%;
-      background: var(--verde2);
-      border-radius: 99px;
-    }
-
-    .dash-list {
-      display: grid;
-      gap: 9px;
-    }
-
-    .dash-item {
-      background: #F7FAF8;
-      border: 1px solid #EAF0EB;
-      border-radius: 12px;
-      padding: 12px;
-    }
-
-    .dash-item strong {
-      font-size: 13px;
-      display: block;
-      margin-bottom: 5px;
-    }
-
-    .dash-item p {
-      margin: 0;
-      font-size: 13px;
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-    }
-
-    .timeline-item {
-      border-left: 2px solid #C8DED2;
-      padding: 0 0 17px 15px;
-      margin-left: 7px;
-      position: relative;
-    }
-
-    .timeline-item:before {
-      content: "";
-      position: absolute;
-      width: 9px;
-      height: 9px;
-      border-radius: 50%;
-      background: var(--verde2);
-      left: -5.5px;
-      top: 3px;
-    }
-
-    .timeline-item strong { font-size: 13px; }
-
-    .timeline-item p {
-      font-size: 13px;
-      margin: 5px 0;
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-    }
-
-    .banner {
-      background: var(--menta);
-      border-radius: 15px;
-      color: var(--verde);
-      padding: 14px 16px;
-      margin-bottom: 15px;
-      line-height: 1.5;
-    }
-
-    .banner strong { font-size: 14px; }
-
-    .banner p {
-      margin: 4px 0 0;
-      font-size: 12px;
-    }
-
-    .notice {
-      padding: 12px;
-      border: 1px solid #ECD5A9;
-      border-radius: 12px;
-      background: #FFF8E9;
-      font-size: 12px;
-      color: #765A2E;
-      margin-bottom: 13px;
-    }
-
-    .modal-backdrop {
-      position: fixed;
-      inset: 0;
-      z-index: 50;
-      background: rgba(9, 30, 21, .55);
-      display: grid;
-      place-items: center;
-      padding: 20px;
-    }
-
-    .modal {
-      width: 100%;
-      max-width: 390px;
-      background: white;
-      border-radius: 21px;
-      padding: 24px;
-      box-shadow: 0 20px 65px rgba(0, 0, 0, .2);
-    }
-
-    .modal h2 {
-      color: var(--verde);
-      font-size: 21px;
-      margin: 0 0 8px;
-    }
-
-    .modal p {
-      color: var(--cinza);
-      font-size: 13px;
-      line-height: 1.5;
-    }
-
-    .toast {
-      position: fixed;
-      z-index: 60;
-      bottom: calc(20px + env(safe-area-inset-bottom));
-      left: 50%;
-      transform: translateX(-50%);
-      width: min(92%, 430px);
-      background: var(--verde);
-      color: white;
-      border-radius: 13px;
-      padding: 14px 17px;
-      text-align: center;
-      font-size: 13px;
-      box-shadow: 0 8px 25px #0002;
-    }
-
-    .toast.error { background: var(--vermelho); }
-
-    .loading {
-      font-size: 13px;
-      color: var(--cinza);
-      text-align: center;
-      padding: 20px;
-    }
-
-    .footer {
-      text-align: center;
-      color: #91A099;
-      font-size: 11px;
-      margin: 25px 0;
-    }
-
-    [hidden] { display: none !important; }
-
-    @media (max-width: 430px) {
-      header { padding-left: 15px; padding-right: 15px; }
-      main { padding: 15px 12px; }
-      .card { padding: 15px; }
-      .form-grid { grid-template-columns: 1fr; }
-      .metrics { gap: 8px; }
-      .metric { padding: 12px; }
-      .metric-value { font-size: 23px; }
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport"
+ content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#174C3C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cuidar">
+<meta name="apple-mobile-web-app-status-bar-style"
+ content="default">
+<meta name="description"
+ content="Acompanhamento diario de Georges e Ilma.">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="icon" href="./apple-touch-icon.png">
+<title>Cuidar | Acompanhamento Diário</title>
+
+<style>
+:root {
+  --primary:#174C3C;
+  --primary2:#28735C;
+  --soft:#E7F3ED;
+  --bg:#F5F8F6;
+  --border:#DBE8E1;
+  --text:#243C32;
+  --muted:#74847C;
+  --white:#FFFFFF;
+  --danger:#B73F48;
+  --shadow:0 6px 22px rgba(25,65,45,.045);
+}
+
+body.ilma {
+  --primary:#A34E73;
+  --primary2:#C87797;
+  --soft:#FCE7F0;
+  --bg:#FFF3F7;
+  --border:#F2D6E2;
+  --text:#62384A;
+  --muted:#9E7C8A;
+  --shadow:0 6px 22px rgba(130,60,90,.055);
+}
+
+* { box-sizing:border-box; }
+
+body {
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,
+    "Segoe UI",Arial,sans-serif;
+  font-size:15px;
+  transition:background .2s;
+}
+
+button,input,textarea,select { font:inherit; }
+button { cursor:pointer; }
+button:disabled { opacity:.55;cursor:not-allowed; }
+
+.app {
+  max-width:850px;
+  margin:auto;
+  min-height:100vh;
+  padding-bottom:calc(30px + env(safe-area-inset-bottom));
+}
+
+header {
+  background:var(--white);
+  padding:calc(20px + env(safe-area-inset-top)) 16px 17px;
+  border-bottom:1px solid var(--border);
+}
+
+.brand {
+  display:flex;
+  align-items:center;
+  gap:11px;
+}
+
+.brand-icon {
+  width:47px;
+  height:47px;
+  flex-shrink:0;
+  display:grid;
+  place-items:center;
+  border-radius:15px;
+  background:var(--primary);
+  color:white;
+  font-size:25px;
+}
+
+.brand h1 {
+  font-size:25px;
+  letter-spacing:-.7px;
+  color:var(--primary);
+  margin:0;
+}
+
+.brand p {
+  color:var(--muted);
+  font-size:12px;
+  margin:3px 0 0;
+}
+
+.nav,.patient-nav {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:7px;
+  border-radius:14px;
+  padding:5px;
+}
+
+.nav {
+  background:var(--soft);
+  margin-top:19px;
+}
+
+.nav button,.patient-nav button {
+  border:0;
+  background:transparent;
+  border-radius:11px;
+  padding:13px 6px;
+  font-weight:750;
+  color:var(--muted);
+}
+
+.nav button.active,.patient-nav button.active {
+  background:var(--primary);
+  color:white;
+}
+
+.patient-nav {
+  margin-top:10px;
+  background:#F0F0F0;
+}
+
+.patient-nav button:first-child:not(.active) {
+  color:#174C3C;
+}
+
+.patient-nav button:last-child:not(.active) {
+  color:#A34E73;
+}
+
+main { padding:17px 14px; }
+
+h2 {
+  font-size:20px;
+  color:var(--primary);
+  margin:0;
+}
+
+h3 {
+  font-size:16px;
+  color:var(--primary);
+  margin:0;
+}
+
+.subtitle {
+  font-size:12px;
+  color:var(--muted);
+  line-height:1.5;
+  margin:5px 0 0;
+}
+
+.heading {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:14px;
+}
+
+.pill {
+  background:var(--soft);
+  color:var(--primary);
+  padding:7px 11px;
+  border-radius:25px;
+  font-weight:750;
+  font-size:12px;
+}
+
+.datebar {
+  display:flex;
+  gap:9px;
+  margin-bottom:16px;
+}
+
+.datebar select { flex:1;min-width:0; }
+
+.btn-today {
+  border:1px solid var(--primary);
+  color:var(--primary);
+  background:white;
+  border-radius:12px;
+  padding:10px 17px;
+  font-weight:750;
+}
+
+.card {
+  background:white;
+  border:1px solid var(--border);
+  border-radius:18px;
+  padding:17px;
+  margin-bottom:13px;
+  box-shadow:var(--shadow);
+}
+
+.card-head {
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:center;
+  margin-bottom:15px;
+}
+
+.card-head p {
+  color:var(--muted);
+  font-size:12px;
+  margin:5px 0 0;
+}
+
+label {
+  display:block;
+  font-size:12px;
+  color:var(--text);
+  font-weight:750;
+  margin:0 0 7px;
+}
+
+input,select,textarea {
+  display:block;
+  width:100%;
+  min-height:46px;
+  border-radius:11px;
+  background:#FCFDFC;
+  border:1px solid var(--border);
+  outline:none;
+  padding:11px 12px;
+  color:var(--text);
+  font-size:16px;
+}
+
+textarea {
+  resize:vertical;
+  min-height:77px;
+}
+
+input:focus,select:focus,textarea:focus {
+  border-color:var(--primary2);
+  box-shadow:0 0 0 3px var(--soft);
+}
+
+.form-grid {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+}
+
+.actions {
+  display:flex;
+  align-items:center;
+  gap:9px;
+  margin-top:12px;
+  flex-wrap:wrap;
+}
+
+.btn-primary {
+  background:var(--primary);
+  color:white;
+  border:0;
+  padding:12px 16px;
+  border-radius:11px;
+  font-weight:750;
+  min-height:44px;
+}
+
+.btn-secondary {
+  border:1px solid var(--border);
+  background:white;
+  color:var(--primary);
+  padding:11px 14px;
+  border-radius:11px;
+  font-weight:750;
+}
+
+.meal {
+  border:1px solid var(--border);
+  border-radius:15px;
+  padding:14px;
+  margin-bottom:12px;
+  background:#FFFFFF;
+}
+
+.meal:last-child { margin-bottom:0; }
+
+.meal-title {
+  font-size:14px;
+  color:var(--primary);
+  font-weight:800;
+  margin:0 0 11px;
+}
+
+.meal-done {
+  background:var(--soft);
+  border-radius:11px;
+  padding:13px;
+}
+
+.meal-done .done-title {
+  font-size:13px;
+  color:var(--primary);
+  font-weight:800;
+}
+
+.meal-done p {
+  font-size:13px;
+  margin:8px 0;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+}
+
+.small {
+  font-size:11px;
+  color:var(--muted);
+  margin-top:5px;
+  line-height:1.5;
+}
+
+.record {
+  display:flex;
+  gap:10px;
+  align-items:flex-start;
+  justify-content:space-between;
+  padding:12px 0;
+  border-bottom:1px solid var(--border);
+}
+
+.record:last-child { border-bottom:0; }
+
+.record-content {
+  min-width:0;
+  flex:1;
+  overflow-wrap:anywhere;
+}
+
+.record-content strong {
+  display:block;
+  font-size:13px;
+  margin-bottom:4px;
+}
+
+.record-content p {
+  font-size:13px;
+  line-height:1.5;
+  white-space:pre-wrap;
+  margin:4px 0;
+}
+
+.delete {
+  flex-shrink:0;
+  background:#FFF0F0;
+  color:#B73F48;
+  border:0;
+  width:35px;
+  height:35px;
+  border-radius:10px;
+  font-size:21px;
+  font-weight:700;
+}
+
+.empty {
+  color:var(--muted);
+  font-size:12px;
+  padding:10px 0;
+}
+
+.section-label {
+  font-size:12px;
+  color:var(--primary);
+  font-weight:800;
+  margin:16px 0 7px;
+}
+
+.water-total {
+  font-size:34px;
+  font-weight:800;
+  color:var(--primary);
+  margin:4px 0 15px;
+}
+
+.water-total span {
+  font-size:13px;
+  color:var(--muted);
+  font-weight:400;
+}
+
+.banner {
+  background:var(--soft);
+  border-radius:15px;
+  padding:14px;
+  color:var(--primary);
+  margin-bottom:14px;
+}
+
+.banner strong { font-size:15px; }
+.banner p { font-size:12px;margin:5px 0 0; }
+
+.metrics {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  margin-bottom:13px;
+}
+
+.metric {
+  background:white;
+  border:1px solid var(--border);
+  padding:15px;
+  border-radius:16px;
+}
+
+.metric-label {
+  color:var(--muted);
+  font-size:12px;
+  margin-bottom:10px;
+}
+
+.metric-value {
+  font-size:27px;
+  font-weight:850;
+  color:var(--primary);
+}
+
+.metric-unit {
+  font-size:11px;
+  color:var(--muted);
+  margin-top:5px;
+}
+
+.progress {
+  background:var(--soft);
+  height:7px;
+  border-radius:10px;
+  margin-top:10px;
+  overflow:hidden;
+}
+
+.progress div {
+  background:var(--primary2);
+  height:100%;
+  width:0;
+}
+
+.dash-list {
+  display:grid;
+  gap:9px;
+  margin-top:13px;
+}
+
+.dash-item {
+  padding:12px;
+  border-radius:12px;
+  background:var(--soft);
+}
+
+.dash-item strong {
+  display:block;
+  font-size:13px;
+  margin-bottom:5px;
+}
+
+.dash-item p {
+  font-size:13px;
+  margin:0 0 5px;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+}
+
+.timeline {
+  border-left:2px solid var(--border);
+  padding:0 0 17px 14px;
+  margin:13px 0 0 6px;
+  position:relative;
+}
+
+.timeline:before {
+  content:"";
+  width:9px;
+  height:9px;
+  background:var(--primary2);
+  border-radius:50%;
+  position:absolute;
+  left:-5.5px;
+  top:4px;
+}
+
+.timeline strong { font-size:13px; }
+
+.timeline p {
+  font-size:13px;
+  margin:5px 0;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+}
+
+.notice {
+  background:#FFF6E5;
+  color:#775B2F;
+  border:1px solid #EEDCB2;
+  border-radius:12px;
+  padding:12px;
+  font-size:12px;
+  line-height:1.5;
+  margin-bottom:14px;
+}
+
+.modal-bg {
+  position:fixed;
+  inset:0;
+  background:rgba(12,29,22,.60);
+  z-index:100;
+  display:grid;
+  place-items:center;
+  padding:20px;
+}
+
+.modal {
+  background:white;
+  padding:24px;
+  border-radius:22px;
+  width:100%;
+  max-width:390px;
+  box-shadow:0 15px 55px #0003;
+}
+
+.modal h2 { margin-bottom:8px; }
+
+.modal p {
+  font-size:13px;
+  color:var(--muted);
+  line-height:1.5;
+}
+
+.toast {
+  position:fixed;
+  bottom:calc(20px + env(safe-area-inset-bottom));
+  left:50%;
+  transform:translateX(-50%);
+  background:var(--primary);
+  color:white;
+  padding:14px 19px;
+  width:min(92%,430px);
+  text-align:center;
+  z-index:200;
+  border-radius:13px;
+  box-shadow:0 8px 25px #0002;
+  font-size:13px;
+}
+
+.toast.error { background:var(--danger); }
+
+.footer {
+  text-align:center;
+  color:var(--muted);
+  font-size:11px;
+  padding:15px;
+}
+
+[hidden] { display:none!important; }
+
+@media(max-width:480px) {
+  main { padding:14px 11px; }
+  header { padding-left:12px;padding-right:12px; }
+  .card { padding:14px; }
+  .form-grid { grid-template-columns:1fr; }
+  .metric { padding:12px; }
+  .metric-value { font-size:24px; }
+}
+</style>
 </head>
 
-<body>
+<body class="georges">
 <div class="app">
   <header>
     <div class="brand">
-      <div class="brand-icon" aria-hidden="true">♥</div>
+      <div class="brand-icon">♥</div>
       <div>
         <h1>Cuidar</h1>
         <p>Acompanhamento diário com carinho</p>
       </div>
     </div>
 
-    <nav class="nav" aria-label="Navegação principal">
-      <button id="nav-care" class="active" type="button">
+    <nav class="nav">
+      <button type="button" id="nav-care" class="active">
         Lançamentos
       </button>
-      <button id="nav-dashboard" type="button">
-        Dashboard
+      <button type="button" id="nav-dash">Dashboard</button>
+    </nav>
+
+    <nav class="patient-nav" aria-label="Selecionar idoso">
+      <button type="button" id="patient-georges" class="active">
+        GEORGES
       </button>
+      <button type="button" id="patient-ilma">ILMA</button>
     </nav>
   </header>
 
   <main>
-    <!-- TELA DOS CUIDADORES -->
+    <!-- LANCAMENTOS -->
     <section id="screen-care">
-      <div class="page-heading">
+      <div class="heading">
         <div>
-          <h2>Registro de cuidados</h2>
-          <div class="muted">Tudo organizado, dia após dia.</div>
+          <h2 id="care-title">Cuidados de Georges</h2>
+          <p class="subtitle">Registro diário dos cuidados.</p>
         </div>
-        <span class="pill" id="care-status">Hoje</span>
+        <span id="care-tag" class="pill">Hoje</span>
       </div>
 
       <div class="datebar">
-        <button type="button"
-          id="care-today" class="btn-today">Hoje</button>
-        <select id="care-date" aria-label="Selecionar data"></select>
+        <button id="care-today" class="btn-today"
+          type="button">Hoje</button>
+        <select id="care-date" aria-label="Data dos cuidados"></select>
       </div>
 
-      <div id="care-loading" class="loading" hidden>
-        Carregando registros...
+      <div id="connection-alert" class="notice" hidden>
+        Integração ainda não configurada. Os campos estão
+        disponíveis para visualização, mas os registros
+        não poderão ser salvos até a conexão com o Google Sheets.
       </div>
 
-      <div id="care-content">
-        <!-- ALIMENTAÇÃO -->
-        <article class="card">
-          <div class="card-head">
+      <!-- ALIMENTACAO -->
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h3>Alimentação</h3>
+            <p>Café da manhã, almoço, jantar e lanches.</p>
+          </div>
+          <span id="meal-counter" class="pill">0 de 3</span>
+        </div>
+        <div id="meals-container"></div>
+      </article>
+
+      <!-- AGUA -->
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h3>Água</h3>
+            <p>Registre cada quantidade ingerida.</p>
+          </div>
+        </div>
+        <div class="water-total">
+          <span id="water-total">0</span>
+          <span>mL no dia</span>
+        </div>
+        <form id="water-form">
+          <div class="form-grid">
             <div>
-              <h3 class="card-title">Alimentação</h3>
-              <p class="card-sub">Registre o que foi ingerido.</p>
+              <label for="water-value">Quantidade (mL)</label>
+              <input id="water-value" type="text"
+                inputmode="numeric" maxlength="3"
+                pattern="[0-9]{1,3}"
+                placeholder="Ex.: 200" required>
             </div>
-            <span class="pill" id="meal-counter">0 de 3</span>
+            <div class="actions">
+              <button class="btn-primary" type="submit">
+                + Adicionar água
+              </button>
+            </div>
           </div>
+        </form>
+        <div id="water-records"></div>
+      </article>
 
-          <div id="meals-container"></div>
-        </article>
+      <!-- MEDICACAO -->
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h3>Medicações</h3>
+            <p>Registre cada administração.</p>
+          </div>
+        </div>
+        <form id="medication-form">
+          <label for="medication-value">Medicação administrada</label>
+          <textarea id="medication-value" required
+            maxlength="1000"
+            placeholder="Medicamento, dose e via de administração"></textarea>
+          <div class="actions">
+            <button class="btn-primary" type="submit">
+              + Registrar medicação
+            </button>
+          </div>
+        </form>
+        <div id="medication-records"></div>
+      </article>
 
-        <!-- ÁGUA -->
-        <article class="card">
-          <div class="card-head">
+      <!-- SINAIS VITAIS -->
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h3>Sinais vitais</h3>
+            <p>Registre pressão, glicemia ou temperatura.</p>
+          </div>
+        </div>
+        <form id="vital-form">
+          <div class="form-grid">
             <div>
-              <h3 class="card-title">Água</h3>
-              <p class="card-sub">Adicione cada quantidade ingerida.</p>
+              <label for="vital-type">Aferição</label>
+              <select id="vital-type">
+                <option value="pressao">Pressão arterial</option>
+                <option value="glicemia">Glicemia</option>
+                <option value="temperatura">Temperatura</option>
+              </select>
+            </div>
+            <div>
+              <label for="vital-value" id="vital-label">
+                Pressão arterial (mmHg)
+              </label>
+              <input id="vital-value" placeholder="120/80"
+                required>
             </div>
           </div>
-
-          <div class="total-water">
-            <strong id="water-total">0</strong>
-            <span>mL no dia</span>
+          <div class="actions">
+            <button class="btn-primary" type="submit">
+              + Registrar aferição
+            </button>
           </div>
+        </form>
+        <div id="vital-records"></div>
+      </article>
 
-          <form id="water-form">
-            <div class="form-grid">
-              <div>
-                <label for="water-value">Quantidade em mL</label>
-                <input id="water-value" type="text"
-                  inputmode="numeric" pattern="[0-9]{1,3}"
-                  maxlength="3" placeholder="Ex.: 200"
-                  required>
-              </div>
-              <div class="form-actions">
-                <button class="btn-primary" type="submit">
-                  + Adicionar água
-                </button>
-              </div>
+      <!-- HIGIENE -->
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h3>Higiene e eliminações</h3>
+            <p>Banho, higiene bucal, urina e evacuação.</p>
+          </div>
+        </div>
+        <form id="hygiene-form">
+          <div class="form-grid">
+            <div>
+              <label for="hygiene-type">Atividade</label>
+              <select id="hygiene-type">
+                <option value="banho">Banho</option>
+                <option value="higiene_bucal">Higiene bucal</option>
+                <option value="urina">Urina</option>
+                <option value="evacuacao">Evacuação</option>
+              </select>
             </div>
-          </form>
-          <div id="water-records"></div>
-        </article>
-
-        <!-- MEDICAÇÕES -->
-        <article class="card">
-          <h3 class="card-title">Medicações</h3>
-          <p class="card-sub">
-            Informe o medicamento e a dose administrada.
-          </p>
-
-          <form id="medication-form">
-            <label for="medication-value">Medicação administrada</label>
-            <textarea id="medication-value"
-              placeholder="Ex.: Medicamento, dose e via de administração"
-              maxlength="1000" required></textarea>
-            <div class="form-actions">
-              <button class="btn-primary" type="submit">
-                + Registrar medicação
-              </button>
+            <div>
+              <label for="hygiene-note">Observação (opcional)</label>
+              <input id="hygiene-note" maxlength="500"
+                placeholder="Ex.: Sem alterações">
             </div>
-          </form>
-          <div id="medication-records"></div>
-        </article>
+          </div>
+          <div class="actions">
+            <button class="btn-primary" type="submit">
+              + Registrar atividade
+            </button>
+          </div>
+        </form>
+        <div id="hygiene-records"></div>
+      </article>
 
-        <!-- SINAIS VITAIS -->
-        <article class="card">
-          <h3 class="card-title">Sinais vitais</h3>
-          <p class="card-sub">
-            Registre as aferições realizadas.
-          </p>
+      <!-- CONSULTAS -->
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h3>Consultas realizadas</h3>
+            <p>Inclua orientações e observações.</p>
+          </div>
+        </div>
+        <form id="consultation-form">
+          <label for="consultation-value">Descrição</label>
+          <textarea id="consultation-value" required
+            maxlength="2000"
+            placeholder="Especialidade, profissional e orientações"></textarea>
+          <div class="actions">
+            <button class="btn-primary" type="submit">
+              + Registrar consulta
+            </button>
+          </div>
+        </form>
+        <div id="consultation-records"></div>
+      </article>
 
-          <form id="vitals-form">
-            <div class="form-grid">
-              <div>
-                <label for="vital-type">Tipo de aferição</label>
-                <select id="vital-type" required>
-                  <option value="pressao">Pressão arterial</option>
-                  <option value="glicemia">Glicemia</option>
-                  <option value="temperatura">Temperatura</option>
-                </select>
-              </div>
-              <div>
-                <label id="vital-label" for="vital-value">
-                  Pressão arterial (mmHg)
-                </label>
-                <input id="vital-value"
-                  placeholder="Ex.: 120/80" required>
-              </div>
-            </div>
-            <div class="form-actions">
-              <button class="btn-primary" type="submit">
-                + Registrar aferição
-              </button>
-            </div>
-          </form>
-          <div id="vital-records"></div>
-        </article>
+      <!-- EXAMES -->
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h3>Exames realizados</h3>
+            <p>Registre os exames e informações relevantes.</p>
+          </div>
+        </div>
+        <form id="exam-form">
+          <label for="exam-value">Descrição do exame</label>
+          <textarea id="exam-value" required
+            maxlength="2000"
+            placeholder="Exame realizado e observações"></textarea>
+          <div class="actions">
+            <button class="btn-primary" type="submit">
+              + Registrar exame
+            </button>
+          </div>
+        </form>
+        <div id="exam-records"></div>
+      </article>
 
-        <!-- HIGIENE E ELIMINAÇÕES -->
-        <article class="card">
-          <h3 class="card-title">Higiene e eliminações</h3>
-          <p class="card-sub">
-            Registre as atividades e eliminações observadas.
-          </p>
-
-          <form id="hygiene-form">
-            <div class="form-grid">
-              <div>
-                <label for="hygiene-type">Atividade</label>
-                <select id="hygiene-type" required>
-                  <option value="banho">Banho</option>
-                  <option value="higiene_bucal">Higiene bucal</option>
-                  <option value="urina">Urina</option>
-                  <option value="evacuacao">Evacuação</option>
-                </select>
-              </div>
-              <div>
-                <label for="hygiene-note">Observação (opcional)</label>
-                <input id="hygiene-note"
-                  maxlength="500"
-                  placeholder="Ex.: Sem alterações">
-              </div>
-            </div>
-            <div class="form-actions">
-              <button class="btn-primary" type="submit">
-                + Registrar atividade
-              </button>
-            </div>
-          </form>
-          <div id="hygiene-records"></div>
-        </article>
-
-        <!-- CONSULTAS -->
-        <article class="card">
-          <h3 class="card-title">Consultas realizadas</h3>
-          <form id="consultation-form">
-            <label for="consultation-value">Descrição da consulta</label>
-            <textarea id="consultation-value"
-              maxlength="2000"
-              placeholder="Ex.: Especialidade, profissional e orientações"
-              required></textarea>
-            <div class="form-actions">
-              <button class="btn-primary" type="submit">
-                + Registrar consulta
-              </button>
-            </div>
-          </form>
-          <div id="consultation-records"></div>
-        </article>
-
-        <!-- EXAMES -->
-        <article class="card">
-          <h3 class="card-title">Exames realizados</h3>
-          <form id="exam-form">
-            <label for="exam-value">Descrição do exame</label>
-            <textarea id="exam-value"
-              maxlength="2000"
-              placeholder="Ex.: Exame realizado e observações"
-              required></textarea>
-            <div class="form-actions">
-              <button class="btn-primary" type="submit">
-                + Registrar exame
-              </button>
-            </div>
-          </form>
-          <div id="exam-records"></div>
-        </article>
-
-        <!-- OCORRÊNCIAS -->
-        <article class="card">
-          <h3 class="card-title">Ocorrências e observações</h3>
-          <p class="card-sub">
-            Registre acontecimentos importantes do dia.
-          </p>
-          <form id="occurrence-form">
-            <label for="occurrence-value">O que aconteceu?</label>
-            <textarea id="occurrence-value"
-              maxlength="2000"
-              placeholder="Ex.: Recusou a alimentação, dormiu mal, apresentou desconforto..."
-              required></textarea>
-            <div class="form-actions">
-              <button class="btn-primary" type="submit">
-                + Registrar ocorrência
-              </button>
-            </div>
-          </form>
-          <div id="occurrence-records"></div>
-        </article>
-      </div>
+      <!-- OCORRENCIAS -->
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h3>Ocorrências e observações</h3>
+            <p>Registre acontecimentos relevantes.</p>
+          </div>
+        </div>
+        <form id="occurrence-form">
+          <label for="occurrence-value">O que aconteceu?</label>
+          <textarea id="occurrence-value" required
+            maxlength="2000"
+            placeholder="Ex.: Recusou a comida, dormiu mal, apresentou desconforto..."></textarea>
+          <div class="actions">
+            <button class="btn-primary" type="submit">
+              + Registrar ocorrência
+            </button>
+          </div>
+        </form>
+        <div id="occurrence-records"></div>
+      </article>
     </section>
 
-    <!-- DASHBOARD DA FAMÍLIA -->
-    <section id="screen-dashboard" hidden>
-      <div class="page-heading">
+    <!-- DASHBOARD -->
+    <section id="screen-dash" hidden>
+      <div class="heading">
         <div>
-          <h2>Painel da família</h2>
-          <div class="muted">
-            Visão consolidada dos cuidados registrados.
-          </div>
+          <h2 id="dash-title">Dashboard de Georges</h2>
+          <p class="subtitle">Acompanhamento da família.</p>
         </div>
-        <button id="dashboard-lock"
-          class="btn-secondary" type="button">
-          Sair
-        </button>
+        <button id="dash-logout" type="button"
+          class="btn-secondary">Sair</button>
       </div>
 
       <div class="datebar">
-        <button id="dashboard-today"
-          class="btn-today" type="button">Hoje</button>
-        <select id="dashboard-date"
-          aria-label="Selecionar dia do dashboard"></select>
+        <button id="dash-today" class="btn-today"
+          type="button">Hoje</button>
+        <select id="dash-date" aria-label="Data do dashboard"></select>
       </div>
 
       <div class="banner">
-        <strong id="dashboard-day-title">Resumo do dia</strong>
-        <p id="dashboard-subtitle">
-          Informações atualizadas conforme os registros.
+        <strong id="dash-day">Resumo do dia</strong>
+        <p id="dash-subtitle">
+          Informações registradas ao longo do dia.
         </p>
       </div>
 
-      <div id="dashboard-loading" class="loading" hidden>
-        Atualizando dashboard...
-      </div>
-
-      <div id="dashboard-content">
-        <div class="metrics">
-          <div class="metric">
-            <div class="metric-label">Água ingerida</div>
-            <div class="metric-value" id="metric-water">0</div>
-            <div class="metric-unit">mL registrados</div>
-          </div>
-
-          <div class="metric">
-            <div class="metric-label">Refeições</div>
-            <div class="metric-value" id="metric-meals">0/3</div>
-            <div class="metric-unit">refeições registradas</div>
-            <div class="progress">
-              <div id="meals-progress" style="width:0%"></div>
-            </div>
-          </div>
-
-          <div class="metric">
-            <div class="metric-label">Medicações</div>
-            <div class="metric-value" id="metric-medications">0</div>
-            <div class="metric-unit">administrações registradas</div>
-          </div>
-
-          <div class="metric">
-            <div class="metric-label">Ocorrências</div>
-            <div class="metric-value" id="metric-occurrences">0</div>
-            <div class="metric-unit">observações registradas</div>
-          </div>
+      <div class="metrics">
+        <div class="metric">
+          <div class="metric-label">Água ingerida</div>
+          <div class="metric-value" id="metric-water">0</div>
+          <div class="metric-unit">mL registrados</div>
         </div>
-
-        <article class="card">
-          <h3 class="card-title">Alimentação do dia</h3>
-          <div id="dash-meals" class="dash-list"></div>
-        </article>
-
-        <article class="card">
-          <h3 class="card-title">Últimos sinais vitais</h3>
-          <div id="dash-vitals" class="dash-list"></div>
-        </article>
-
-        <article class="card">
-          <h3 class="card-title">Higiene e eliminações</h3>
-          <div id="dash-hygiene" class="dash-list"></div>
-        </article>
-
-        <article class="card">
-          <h3 class="card-title">Medicações administradas</h3>
-          <div id="dash-medications" class="dash-list"></div>
-        </article>
-
-        <article class="card">
-          <h3 class="card-title">Consultas e exames</h3>
-          <div id="dash-health-events" class="dash-list"></div>
-        </article>
-
-        <article class="card">
-          <h3 class="card-title">Ocorrências</h3>
-          <div id="dash-occurrences" class="dash-list"></div>
-        </article>
-
-        <article class="card">
-          <h3 class="card-title">Linha do tempo</h3>
-          <p class="card-sub">
-            Sequência dos registros efetuados no dia.
-          </p>
-          <div id="dash-timeline"></div>
-        </article>
+        <div class="metric">
+          <div class="metric-label">Refeições principais</div>
+          <div class="metric-value" id="metric-meals">0/3</div>
+          <div class="metric-unit">registros realizados</div>
+          <div class="progress"><div id="meal-progress"></div></div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Lanches</div>
+          <div class="metric-value" id="metric-snacks">0</div>
+          <div class="metric-unit">lançamentos no dia</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Medicações</div>
+          <div class="metric-value" id="metric-meds">0</div>
+          <div class="metric-unit">administrações registradas</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Ocorrências</div>
+          <div class="metric-value" id="metric-events">0</div>
+          <div class="metric-unit">observações registradas</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Registros do dia</div>
+          <div class="metric-value" id="metric-total">0</div>
+          <div class="metric-unit">atividades registradas</div>
+        </div>
       </div>
+
+      <article class="card">
+        <h3>Alimentação do dia</h3>
+        <div id="dash-meals" class="dash-list"></div>
+      </article>
+
+      <article class="card">
+        <h3>Últimos sinais vitais</h3>
+        <div id="dash-vitals" class="dash-list"></div>
+      </article>
+
+      <article class="card">
+        <h3>Higiene e eliminações</h3>
+        <div id="dash-hygiene" class="dash-list"></div>
+      </article>
+
+      <article class="card">
+        <h3>Medicações administradas</h3>
+        <div id="dash-medications" class="dash-list"></div>
+      </article>
+
+      <article class="card">
+        <h3>Consultas e exames</h3>
+        <div id="dash-health" class="dash-list"></div>
+      </article>
+
+      <article class="card">
+        <h3>Ocorrências</h3>
+        <div id="dash-occurrences" class="dash-list"></div>
+      </article>
+
+      <article class="card">
+        <h3>Linha do tempo</h3>
+        <p class="subtitle">Histórico dos registros do dia.</p>
+        <div id="dash-timeline"></div>
+      </article>
     </section>
 
     <div class="footer">
-      Cuidar · Acompanhamento diário
+      Cuidar · Georges & Ilma
     </div>
   </main>
 </div>
 
-<!-- SENHA DO DASHBOARD -->
-<div id="login-modal" class="modal-backdrop" hidden>
-  <div class="modal" role="dialog"
-    aria-modal="true" aria-labelledby="login-title">
-    <h2 id="login-title">Acesso da família</h2>
-    <p>Insira sua senha para visualizar o dashboard.</p>
+<!-- MODAL DE SENHA -->
+<div id="login-modal" class="modal-bg" hidden>
+  <div class="modal" role="dialog" aria-modal="true"
+       aria-labelledby="login-heading">
+    <h2 id="login-heading">Acesso da família</h2>
+    <p>Insira sua senha para acessar o Dashboard.</p>
     <form id="login-form">
       <label for="family-password">Senha</label>
-      <input id="family-password" type="password"
+      <input type="password" id="family-password"
         autocomplete="off" required>
-      <div class="form-actions">
-        <button class="btn-primary" type="submit">
-          Entrar
-        </button>
-        <button id="login-cancel" type="button"
-          class="btn-cancel">Cancelar</button>
+      <div class="actions">
+        <button class="btn-primary" type="submit">Entrar</button>
+        <button class="btn-secondary" type="button"
+          id="login-cancel">Cancelar</button>
       </div>
     </form>
   </div>
 </div>
 
 <div id="toast" class="toast" role="status"
-  aria-live="polite" hidden></div>
+ aria-live="polite" hidden></div>
 
 <script src="./main.js"></script>
 </body>
