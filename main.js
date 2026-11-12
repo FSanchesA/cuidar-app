@@ -2,11 +2,12 @@
 "use strict";
 
 /*
- CUIDAR - ACOMPANHAMENTO DIARIO
- Frontend GitHub Pages
+ CUIDAR - MAIN.JS
+ Georges e Ilma | Frontend GitHub Pages
 
- Substituir API_URL apos configurar o Cloudflare.
- NUNCA inserir senhas ou BRIDGE_SECRET aqui.
+ ATENCAO:
+ Preencher API_URL somente apos configurar o Worker.
+ Nao inserir senhas nem BRIDGE_SECRET aqui.
 */
 
 const CONFIG = {
@@ -15,28 +16,22 @@ const CONFIG = {
   REFRESH_MS: 30000
 };
 
-const state = {
-  screen: "care",
-  careDate: "",
-  dashboardDate: "",
-  careData: null,
-  dashboardData: null,
-  familyToken: null,
-  busy: false,
-  editingMeal: null,
-  knownDates: []
+const $ = id => document.getElementById(id);
+
+const PATIENTS = {
+  GEORGES: "Georges",
+  ILMA: "Ilma"
 };
 
 const MEALS = {
   cafe: "Café da manhã",
   almoco: "Almoço",
-  jantar: "Jantar"
+  jantar: "Jantar",
+  lanche: "Lanche"
 };
 
 const TYPES = {
-  cafe: "Café da manhã",
-  almoco: "Almoço",
-  jantar: "Jantar",
+  ...MEALS,
   pressao: "Pressão arterial",
   glicemia: "Glicemia",
   temperatura: "Temperatura",
@@ -57,10 +52,23 @@ const CATEGORIES = {
   ocorrencia: "Ocorrência"
 };
 
-const $ = id => document.getElementById(id);
+const state = {
+  patient: "GEORGES",
+  screen: "care",
+  careDate: "",
+  dashDate: "",
+  careData: null,
+  dashData: null,
+  familyToken: null,
+  dates: [],
+  busy: false,
+  lastDay: ""
+};
 
-function escapeHTML(value) {
-  return String(value ?? "")
+/* ===== UTILITARIOS ===== */
+
+function esc(v) {
+  return String(v ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -76,21 +84,32 @@ function today() {
     day: "2-digit"
   }).formatToParts(new Date());
 
-  const get = type =>
-    parts.find(p => p.type === type).value;
+  const part = key =>
+    parts.find(p => p.type === key).value;
 
-  return `${get("year")}-${get("month")}-${get("day")}`;
+  return `${part("year")}-${part("month")}-${part("day")}`;
 }
 
-function dateLabel(date) {
-  if (!date) return "";
-  const [y, m, d] = date.split("-");
+function dateLabel(value) {
+  if (!value) return "";
+  const [y, m, d] = value.split("-");
   return `${d}/${m}/${y}`;
 }
 
-function dateWithWeekday(date) {
-  const [y, m, d] = date.split("-").map(Number);
-  const utc = new Date(Date.UTC(y, m - 1, d, 12));
+function timeLabel(value) {
+  return value ? String(value).slice(11, 16) : "";
+}
+
+function dateTime(value) {
+  if (!value) return "";
+  return dateLabel(String(value).slice(0, 10)) +
+    " às " + timeLabel(value);
+}
+
+function fullDate(value) {
+  if (!value) return "";
+  const [y, m, d] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d, 12));
 
   return new Intl.DateTimeFormat("pt-BR", {
     weekday: "long",
@@ -98,77 +117,33 @@ function dateWithWeekday(date) {
     month: "long",
     year: "numeric",
     timeZone: "UTC"
-  }).format(utc);
-}
-
-function timeLabel(timestamp) {
-  if (!timestamp) return "";
-  const text = String(timestamp);
-  return text.slice(11, 16);
-}
-
-function displayTimestamp(timestamp) {
-  if (!timestamp) return "";
-  const text = String(timestamp);
-  return dateLabel(text.slice(0, 10)) +
-    " às " + timeLabel(text);
+  }).format(date);
 }
 
 function notify(message, error = false) {
-  const element = $("toast");
-  element.textContent = message;
-  element.classList.toggle("error", error);
-  element.hidden = false;
+  const node = $("toast");
+  node.textContent = message;
+  node.classList.toggle("error", error);
+  node.hidden = false;
 
   clearTimeout(notify.timer);
   notify.timer = setTimeout(() => {
-    element.hidden = true;
+    node.hidden = true;
   }, 3500);
 }
 
 function setBusy(value) {
   state.busy = value;
 
-  document.querySelectorAll(
-    'form button[type="submit"]'
-  ).forEach(button => {
-    button.disabled = value;
+  document.querySelectorAll("button").forEach(button => {
+    if (
+      button.closest("form") ||
+      button.classList.contains("delete") ||
+      button.closest(".patient-nav")
+    ) {
+      button.disabled = value;
+    }
   });
-}
-
-async function api(action, payload = {}) {
-  if (!CONFIG.API_URL) {
-    throw new Error(
-      "A integração com Cloudflare ainda não foi configurada."
-    );
-  }
-
-  const response = await fetch(CONFIG.API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ action, payload }),
-    cache: "no-store"
-  });
-
-  let data;
-
-  try {
-    data = await response.json();
-  } catch {
-    throw new Error(
-      "A conexão retornou uma resposta inválida."
-    );
-  }
-
-  if (!response.ok || !data.ok) {
-    throw new Error(
-      data.error || "Não foi possível concluir a operação."
-    );
-  }
-
-  return data;
 }
 
 function handleError(error) {
@@ -176,7 +151,7 @@ function handleError(error) {
   notify(message, true);
 
   if (
-    state.screen === "dashboard" &&
+    state.screen === "dash" &&
     /sess[aã]o expirada|insira sua senha/i.test(message)
   ) {
     leaveDashboard();
@@ -184,19 +159,60 @@ function handleError(error) {
   }
 }
 
-function uniqueDates(serverDates = []) {
-  const dates = new Set(serverDates);
+async function api(action, payload = {}) {
+  if (!CONFIG.API_URL) {
+    throw Error(
+      "A conexão com o Google Sheets ainda não foi configurada."
+    );
+  }
+
+  const response = await fetch(CONFIG.API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+    body: JSON.stringify({ action, payload })
+  });
+
+  let result;
+
+  try {
+    result = await response.json();
+  } catch {
+    throw Error("Resposta inválida do servidor.");
+  }
+
+  if (!response.ok || !result.ok) {
+    throw Error(
+      result.error || "Não foi possível concluir a operação."
+    );
+  }
+
+  return result;
+}
+
+function empty(message = "Nenhum registro neste dia.") {
+  return `<div class="empty">${esc(message)}</div>`;
+}
+
+function filterRecords(category, records) {
+  return records
+    .filter(r => r.category === category)
+    .sort((a, b) =>
+      String(b.createdAt).localeCompare(String(a.createdAt))
+    );
+}
+
+function availableDates() {
+  const dates = new Set(state.dates);
   const current = today();
 
-  // Permite registrar retroativamente nos ultimos 60 dias,
-  // inclusive em dias sem registros anteriores.
   const [y, m, d] = current.split("-").map(Number);
   const base = new Date(Date.UTC(y, m - 1, d, 12));
 
   for (let i = 0; i < 60; i++) {
-    const day = new Date(base);
-    day.setUTCDate(base.getUTCDate() - i);
-    dates.add(day.toISOString().slice(0, 10));
+    const date = new Date(base);
+    date.setUTCDate(base.getUTCDate() - i);
+    dates.add(date.toISOString().slice(0, 10));
   }
 
   dates.add(current);
@@ -204,210 +220,285 @@ function uniqueDates(serverDates = []) {
   return [...dates]
     .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d))
     .filter(d => d <= current)
-    .sort()
-    .reverse();
+    .sort().reverse();
 }
 
-function fillDates(selectId, selected) {
-  const select = $(selectId);
-  const dates = uniqueDates(state.knownDates);
+function populateDate(id, selected) {
+  const el = $(id);
+  const dates = availableDates();
 
-  if (!dates.includes(selected)) {
+  if (selected && !dates.includes(selected)) {
     dates.push(selected);
     dates.sort().reverse();
   }
 
-  select.replaceChildren();
+  el.replaceChildren();
 
-  for (const date of dates) {
-    const option = document.createElement("option");
-    option.value = date;
-    option.textContent =
-      date === today() ? "Hoje - " + dateLabel(date) :
-      dateLabel(date);
+  dates.forEach(date => {
+    const opt = document.createElement("option");
+    opt.value = date;
+    opt.textContent = date === today()
+      ? `Hoje - ${dateLabel(date)}`
+      : dateLabel(date);
+    el.appendChild(opt);
+  });
 
-    select.appendChild(option);
-  }
-
-  select.value = selected;
+  el.value = selected;
 }
 
-function updateDateControls() {
-  fillDates("care-date", state.careDate);
-  fillDates("dashboard-date", state.dashboardDate);
+function updateControls() {
+  populateDate("care-date", state.careDate);
+  populateDate("dash-date", state.dashDate);
 
-  $("care-status").textContent =
+  $("care-tag").textContent =
     state.careDate === today() ? "Hoje" : "Histórico";
 }
 
-function emptyHTML(message = "Nenhum registro neste dia.") {
-  return `<div class="empty">${escapeHTML(message)}</div>`;
+/* ===== SELECAO DE IDOSO ===== */
+
+function applyPatient() {
+  document.body.classList.toggle(
+    "ilma", state.patient === "ILMA"
+  );
+  document.body.classList.toggle(
+    "georges", state.patient === "GEORGES"
+  );
+
+  $("patient-georges").classList.toggle(
+    "active", state.patient === "GEORGES"
+  );
+  $("patient-ilma").classList.toggle(
+    "active", state.patient === "ILMA"
+  );
+
+  const name = PATIENTS[state.patient];
+
+  $("care-title").textContent = `Cuidados de ${name}`;
+  $("dash-title").textContent = `Dashboard de ${name}`;
+  document.title = `Cuidar | ${name}`;
 }
 
-function recordsBy(category, data = state.careData) {
-  return (data?.records || [])
-    .filter(record => record.category === category)
-    .sort((a, b) =>
-      String(b.createdAt).localeCompare(String(a.createdAt))
-    );
-}
+async function selectPatient(patient) {
+  if (state.busy || state.patient === patient) return;
 
-function renderRecords(targetId, records, deletable = true) {
-  const target = $(targetId);
+  state.patient = patient;
+  state.careData = null;
+  state.dashData = null;
+  state.dates = [];
 
-  if (!records.length) {
-    target.innerHTML = emptyHTML();
-    return;
+  applyPatient();
+  updateControls();
+
+  // Mostra imediatamente formularios sem registros.
+  renderCare();
+
+  if (state.screen === "dash") {
+    renderDashboard();
+    await loadDashboard();
+  } else {
+    await loadCare();
   }
+}
 
-  target.innerHTML = records.map(record => {
-    const label = TYPES[record.type] ||
-      CATEGORIES[record.category] || "Registro";
+/* ===== EXIBICAO DOS REGISTROS ===== */
 
-    const unit = record.unit ?
-      " " + escapeHTML(record.unit) : "";
+function recordHTML(record) {
+  const name = TYPES[record.type] ||
+    CATEGORIES[record.category] || "Registro";
 
-    return `
-      <div class="record">
-        <div class="record-main">
-          <strong>${escapeHTML(label)}</strong>
-          <p>${escapeHTML(record.value)}${unit}</p>
-          ${record.notes ?
-            `<p>${escapeHTML(record.notes)}</p>` : ""}
-          <div class="record-time">
-            Registrado em ${escapeHTML(
-              displayTimestamp(record.createdAt)
-            )}
-          </div>
+  return `
+    <div class="record">
+      <div class="record-content">
+        <strong>${esc(name)}</strong>
+        <p>${esc(record.value)}
+          ${record.unit ? esc(record.unit) : ""}
+        </p>
+        ${record.notes ? `<p>${esc(record.notes)}</p>` : ""}
+        <div class="small">
+          Registrado em ${esc(dateTime(record.createdAt))}
         </div>
-        ${deletable ? `
-          <button type="button" class="btn-delete"
-            data-delete="${escapeHTML(record.id)}"
-            aria-label="Excluir registro"
-            title="Excluir registro">×</button>` : ""}
       </div>
-    `;
-  }).join("");
+      <button type="button" class="delete"
+        data-delete="${esc(record.id)}"
+        title="Excluir registro"
+        aria-label="Excluir registro">×</button>
+    </div>
+  `;
 }
 
-/* =====================================================
-   LANCAMENTOS
-===================================================== */
-
-async function loadCare(silent = false) {
-  if (state.busy) return;
-
-  if (!silent) $("care-loading").hidden = false;
-
-  try {
-    const requestedDate = state.careDate;
-    const data = await api("init", {
-      date: requestedDate
-    });
-
-    if (state.careDate !== requestedDate) return;
-
-    state.careData = data;
-    state.knownDates = data.dates || [];
-    renderCare();
-
-  } catch (error) {
-    if (!silent) handleError(error);
-  } finally {
-    $("care-loading").hidden = true;
-  }
+function renderList(targetId, records) {
+  $(targetId).innerHTML = records.length
+    ? records.map(recordHTML).join("")
+    : empty();
 }
 
-function renderCare() {
-  updateDateControls();
-  renderMeals();
-
-  const summary = state.careData?.summary || {};
-  $("water-total").textContent =
-    summary.agua?.totalMl || 0;
-
-  renderRecords("water-records", recordsBy("agua"));
-  renderRecords("medication-records", recordsBy("medicacao"));
-  renderRecords("vital-records", recordsBy("sinais_vitais"));
-  renderRecords("hygiene-records", recordsBy("higiene"));
-  renderRecords("consultation-records", recordsBy("consulta"));
-  renderRecords("exam-records", recordsBy("exame"));
-  renderRecords("occurrence-records", recordsBy("ocorrencia"));
-}
+/* ===== ALIMENTACAO ===== */
 
 function renderMeals() {
-  const records = recordsBy("alimentacao");
-  const container = $("meals-container");
+  const records = filterRecords(
+    "alimentacao", state.careData?.records || []
+  );
 
-  $("meal-counter").textContent = `${records.length} de 3`;
+  const mainMeals = ["cafe", "almoco", "jantar"];
 
-  container.innerHTML = Object.entries(MEALS)
-    .map(([type, label]) => {
-      const existing = records.find(r => r.type === type);
-      const editing = state.editingMeal === type;
+  const mainCount = mainMeals.filter(type =>
+    records.some(r => r.type === type)
+  ).length;
 
-      if (existing && !editing) {
-        return `
-          <div class="section-title">${escapeHTML(label)}</div>
-          <div class="meal-status">
-            <strong>✓ Refeição registrada</strong>
-            <p>${escapeHTML(existing.value)}</p>
-            <div class="record-time">
-              ${escapeHTML(
-                displayTimestamp(existing.createdAt)
-              )}
+  $("meal-counter").textContent = `${mainCount} de 3`;
+
+  const fixedHTML = mainMeals.map(type => {
+    const record = records.find(r => r.type === type);
+
+    if (record) {
+      return `
+        <div class="meal">
+          <div class="meal-title">${esc(MEALS[type])}</div>
+          <div class="meal-done">
+            <div class="done-title">✓ Refeição registrada</div>
+            <p>${esc(record.value)}</p>
+            <div class="small">
+              ${esc(dateTime(record.createdAt))}
             </div>
-            <div class="form-actions">
-              <button type="button" class="btn-secondary"
-                data-edit-meal="${type}">Editar</button>
+            <div class="actions">
+              <button type="button" class="delete"
+                data-delete="${esc(record.id)}"
+                aria-label="Excluir ${esc(MEALS[type])}"
+                title="Excluir para lançar novamente">×</button>
+              <span class="small">
+                Para lançar novamente, exclua o registro anterior.
+              </span>
             </div>
           </div>
-        `;
-      }
+        </div>
+      `;
+    }
 
-      return `
+    return `
+      <div class="meal">
         <form class="meal-form" data-meal="${type}">
-          <div class="section-title">${escapeHTML(label)}</div>
+          <div class="meal-title">${esc(MEALS[type])}</div>
           <label for="meal-${type}">
             O que foi ingerido?
           </label>
-          <textarea id="meal-${type}" name="mealValue"
-            maxlength="1000"
-            placeholder="Descreva os alimentos e bebidas"
-            required>${escapeHTML(existing?.value || "")}</textarea>
-          <div class="form-actions">
+          <textarea id="meal-${type}" name="value"
+            maxlength="1000" required
+            placeholder="Descreva os alimentos e bebidas"></textarea>
+          <div class="actions">
             <button type="submit" class="btn-primary">
-              ${existing ? "Salvar alteração" : "Registrar refeição"}
+              Registrar ${esc(MEALS[type])}
             </button>
-            ${editing ? `
-              <button type="button" class="btn-cancel"
-                data-cancel-meal="1">Cancelar</button>
-            ` : ""}
           </div>
         </form>
-      `;
-    }).join("");
+      </div>
+    `;
+  }).join("");
+
+  const snacks = records.filter(r => r.type === "lanche");
+
+  const snacksHTML = `
+    <div class="meal">
+      <form class="meal-form" data-meal="lanche">
+        <div class="meal-title">Lanches</div>
+        <label for="meal-lanche">O que foi ingerido?</label>
+        <textarea id="meal-lanche" name="value"
+          maxlength="1000" required
+          placeholder="Ex.: Fruta, suco, biscoito..."></textarea>
+        <div class="actions">
+          <button type="submit" class="btn-primary">
+            + Registrar lanche
+          </button>
+        </div>
+        <p class="subtitle">
+          É possível registrar vários lanches durante o dia.
+        </p>
+      </form>
+
+      <div class="section-label">
+        Lanches registrados (${snacks.length})
+      </div>
+
+      ${snacks.length
+        ? snacks.map(recordHTML).join("")
+        : empty("Nenhum lanche registrado.")}
+    </div>
+  `;
+
+  $("meals-container").innerHTML = fixedHTML + snacksHTML;
 }
 
-async function saveRecord(payload, form = null) {
+/* ===== TELA DE LANCAMENTOS ===== */
+
+function renderCare() {
+  const records = state.careData?.records || [];
+  const summary = state.careData?.summary || {};
+
+  updateControls();
+  renderMeals();
+
+  $("water-total").textContent = summary.agua?.totalMl || 0;
+
+  const targets = [
+    ["water-records", "agua"],
+    ["medication-records", "medicacao"],
+    ["vital-records", "sinais_vitais"],
+    ["hygiene-records", "higiene"],
+    ["consultation-records", "consulta"],
+    ["exam-records", "exame"],
+    ["occurrence-records", "ocorrencia"]
+  ];
+
+  targets.forEach(([id, category]) => {
+    renderList(id, filterRecords(category, records));
+  });
+}
+
+async function loadCare(silent = false) {
+  if (state.busy) return;
+  if (!CONFIG.API_URL) return;
+
+  const patient = state.patient;
+  const date = state.careDate;
+
+  try {
+    const data = await api("init", {
+      patient,
+      date
+    });
+
+    if (
+      state.patient !== patient ||
+      state.careDate !== date
+    ) return;
+
+    state.careData = data;
+    state.dates = data.dates || [];
+    renderCare();
+  } catch (error) {
+    if (!silent) handleError(error);
+  }
+}
+
+/* ===== SALVAR E EXCLUIR ===== */
+
+async function saveRecord(fields) {
   if (state.busy) return false;
+
+  const patient = state.patient;
+  const date = state.careDate;
 
   setBusy(true);
 
   try {
     await api("save", {
-      ...payload,
-      date: state.careDate
+      ...fields,
+      patient,
+      date
     });
 
-    state.editingMeal = null;
-
-    if (form) form.reset();
-
     notify("Registro salvo com sucesso.");
-    await loadAfterSave();
+    await refreshCare();
     return true;
-
   } catch (error) {
     handleError(error);
     return false;
@@ -416,32 +507,36 @@ async function saveRecord(payload, form = null) {
   }
 }
 
-async function loadAfterSave() {
-  // Atualiza imediatamente, sem depender do temporizador.
+async function refreshCare() {
   const data = await api("init", {
+    patient: state.patient,
     date: state.careDate
   });
 
   state.careData = data;
-  state.knownDates = data.dates || [];
+  state.dates = data.dates || [];
   renderCare();
 }
 
 async function deleteRecord(id) {
   if (state.busy) return;
 
-  const confirmed = window.confirm(
+  const yes = window.confirm(
     "Tem certeza que deseja excluir este lançamento?"
   );
 
-  if (!confirmed) return;
+  if (!yes) return;
 
   setBusy(true);
 
   try {
-    await api("delete", { id });
+    await api("delete", {
+      id,
+      patient: state.patient
+    });
+
     notify("Lançamento excluído.");
-    await loadAfterSave();
+    await refreshCare();
 
   } catch (error) {
     handleError(error);
@@ -450,136 +545,8 @@ async function deleteRecord(id) {
   }
 }
 
-function bindCareForms() {
-  $("meals-container").addEventListener("submit", async event => {
-    const form = event.target.closest(".meal-form");
-    if (!form) return;
-
-    event.preventDefault();
-
-    const type = form.dataset.meal;
-    const value = form.elements.mealValue.value.trim();
-
-    const existing = recordsBy("alimentacao")
-      .find(r => r.type === type);
-
-    await saveRecord({
-      id: existing?.id || "",
-      category: "alimentacao",
-      type,
-      value
-    });
-  });
-
-  $("meals-container").addEventListener("click", event => {
-    const edit = event.target.closest("[data-edit-meal]");
-    const cancel = event.target.closest("[data-cancel-meal]");
-
-    if (edit) {
-      state.editingMeal = edit.dataset.editMeal;
-      renderMeals();
-    }
-
-    if (cancel) {
-      state.editingMeal = null;
-      renderMeals();
-    }
-  });
-
-  $("water-value").addEventListener("input", event => {
-    event.target.value = event.target.value
-      .replace(/\D/g, "")
-      .slice(0, 3);
-  });
-
-  $("water-form").addEventListener("submit", async event => {
-    event.preventDefault();
-
-    const value = $("water-value").value;
-
-    if (!/^[0-9]{1,3}$/.test(value) || Number(value) < 1) {
-      notify("Informe de 1 a 999 mL.", true);
-      return;
-    }
-
-    await saveRecord({
-      category: "agua",
-      type: "agua",
-      value: Number(value)
-    }, event.currentTarget);
-  });
-
-  $("medication-form").addEventListener("submit", async event => {
-    event.preventDefault();
-
-    await saveRecord({
-      category: "medicacao",
-      type: "medicacao",
-      value: $("medication-value").value.trim()
-    }, event.currentTarget);
-  });
-
-  $("vital-type").addEventListener("change", updateVitalInput);
-
-  $("vitals-form").addEventListener("submit", async event => {
-    event.preventDefault();
-
-    const type = $("vital-type").value;
-    const value = $("vital-value").value.trim();
-
-    if (type === "pressao" && !/^\d{2,3}\s*\/\s*\d{2,3}$/.test(value)) {
-      notify("Use o formato 120/80.", true);
-      return;
-    }
-
-    await saveRecord({
-      category: "sinais_vitais",
-      type,
-      value
-    }, event.currentTarget);
-
-    updateVitalInput();
-  });
-
-  $("hygiene-form").addEventListener("submit", async event => {
-    event.preventDefault();
-
-    await saveRecord({
-      category: "higiene",
-      type: $("hygiene-type").value,
-      value: "Realizado",
-      notes: $("hygiene-note").value.trim()
-    }, event.currentTarget);
-  });
-
-  const textForms = [
-    ["consultation-form", "consultation-value", "consulta"],
-    ["exam-form", "exam-value", "exame"],
-    ["occurrence-form", "occurrence-value", "ocorrencia"]
-  ];
-
-  textForms.forEach(([formId, inputId, category]) => {
-    $(formId).addEventListener("submit", async event => {
-      event.preventDefault();
-
-      await saveRecord({
-        category,
-        type: category,
-        value: $(inputId).value.trim()
-      }, event.currentTarget);
-    });
-  });
-
-  $("screen-care").addEventListener("click", event => {
-    const button = event.target.closest("[data-delete]");
-    if (button) deleteRecord(button.dataset.delete);
-  });
-}
-
-function updateVitalInput() {
+function updateVitalFields() {
   const type = $("vital-type").value;
-  const input = $("vital-value");
-  const label = $("vital-label");
 
   const options = {
     pressao: ["Pressão arterial (mmHg)", "Ex.: 120/80"],
@@ -587,15 +554,130 @@ function updateVitalInput() {
     temperatura: ["Temperatura (°C)", "Ex.: 36,5"]
   };
 
-  label.textContent = options[type][0];
-  input.placeholder = options[type][1];
-  input.value = "";
-  input.inputMode = type === "pressao" ? "text" : "decimal";
+  $("vital-label").textContent = options[type][0];
+  $("vital-value").placeholder = options[type][1];
+  $("vital-value").value = "";
+  $("vital-value").inputMode =
+    type === "pressao" ? "text" : "decimal";
 }
 
-/* =====================================================
-   DASHBOARD E AUTENTICACAO
-===================================================== */
+function bindForms() {
+  $("meals-container").addEventListener("submit", async e => {
+    const form = e.target.closest(".meal-form");
+    if (!form) return;
+
+    e.preventDefault();
+
+    const type = form.dataset.meal;
+    const value = form.elements.value.value.trim();
+
+    await saveRecord({
+      category: "alimentacao",
+      type,
+      value
+    });
+  });
+
+  $("water-value").addEventListener("input", e => {
+    e.target.value = e.target.value.replace(/\D/g, "").slice(0, 3);
+  });
+
+  $("water-form").addEventListener("submit", async e => {
+    e.preventDefault();
+
+    const value = $("water-value").value;
+
+    if (!/^\d{1,3}$/.test(value) || Number(value) === 0) {
+      notify("Informe uma quantidade entre 1 e 999 mL.", true);
+      return;
+    }
+
+    const ok = await saveRecord({
+      category: "agua",
+      type: "agua",
+      value
+    });
+
+    if (ok) e.target.reset();
+  });
+
+  $("medication-form").addEventListener("submit", async e => {
+    e.preventDefault();
+
+    const ok = await saveRecord({
+      category: "medicacao",
+      type: "medicacao",
+      value: $("medication-value").value.trim()
+    });
+
+    if (ok) e.target.reset();
+  });
+
+  $("vital-type").addEventListener("change", updateVitalFields);
+
+  $("vital-form").addEventListener("submit", async e => {
+    e.preventDefault();
+
+    const type = $("vital-type").value;
+    const value = $("vital-value").value.trim();
+
+    if (
+      type === "pressao" &&
+      !/^\d{2,3}\s*\/\s*\d{2,3}$/.test(value)
+    ) {
+      notify("Informe a pressão no formato 120/80.", true);
+      return;
+    }
+
+    const ok = await saveRecord({
+      category: "sinais_vitais",
+      type,
+      value
+    });
+
+    if (ok) updateVitalFields();
+  });
+
+  $("hygiene-form").addEventListener("submit", async e => {
+    e.preventDefault();
+
+    const ok = await saveRecord({
+      category: "higiene",
+      type: $("hygiene-type").value,
+      value: "Realizado",
+      notes: $("hygiene-note").value.trim()
+    });
+
+    if (ok) e.target.reset();
+  });
+
+  const forms = [
+    ["consultation-form", "consultation-value", "consulta"],
+    ["exam-form", "exam-value", "exame"],
+    ["occurrence-form", "occurrence-value", "ocorrencia"]
+  ];
+
+  forms.forEach(([formId, fieldId, category]) => {
+    $(formId).addEventListener("submit", async e => {
+      e.preventDefault();
+
+      const ok = await saveRecord({
+        category,
+        type: category,
+        value: $(fieldId).value.trim()
+      });
+
+      if (ok) e.target.reset();
+    });
+  });
+
+  $("screen-care").addEventListener("click", e => {
+    const button = e.target.closest("[data-delete]");
+    if (button) deleteRecord(button.dataset.delete);
+  });
+}
+
+/* ===== DASHBOARD E SENHA ===== */
 
 function openLogin() {
   $("login-modal").hidden = false;
@@ -608,21 +690,21 @@ function closeLogin() {
   $("family-password").value = "";
 }
 
-async function loginFamily(password) {
+async function loginFamily() {
   if (state.busy) return;
 
   setBusy(true);
 
   try {
     const result = await api("login", {
-      password
+      password: $("family-password").value
     });
 
     state.familyToken = result.token;
-    state.dashboardDate = state.careDate || today();
+    state.dashDate = state.careDate;
 
     closeLogin();
-    showScreen("dashboard");
+    showScreen("dash");
     await loadDashboard();
 
   } catch (error) {
@@ -636,13 +718,11 @@ function leaveDashboard() {
   const token = state.familyToken;
 
   state.familyToken = null;
-  state.dashboardData = null;
+  state.dashData = null;
 
-  $("dashboard-content").hidden = true;
   showScreen("care");
 
   if (token) {
-    // Logout em segundo plano, sem bloquear a navegacao.
     api("logout", { token }).catch(() => {});
   }
 }
@@ -653,180 +733,182 @@ async function loadDashboard(silent = false) {
     return;
   }
 
-  if (!silent) $("dashboard-loading").hidden = false;
+  if (!CONFIG.API_URL) return;
+
+  const patient = state.patient;
+  const date = state.dashDate;
+  const token = state.familyToken;
 
   try {
-    const requestedDate = state.dashboardDate;
-    const token = state.familyToken;
-
     const data = await api("list", {
-      date: requestedDate,
       mode: "familia",
+      patient,
+      date,
       token
     });
 
     if (
-      state.dashboardDate !== requestedDate ||
+      state.patient !== patient ||
+      state.dashDate !== date ||
       state.familyToken !== token
     ) return;
 
-    state.dashboardData = data;
-    state.knownDates = data.dates || [];
+    state.dashData = data;
+    state.dates = data.dates || [];
     renderDashboard();
-    $("dashboard-content").hidden = false;
-
   } catch (error) {
-    handleError(error);
-  } finally {
-    $("dashboard-loading").hidden = true;
+    if (!silent) handleError(error);
   }
 }
 
+function dashboardItems(target, records) {
+  if (!records.length) {
+    $(target).innerHTML = empty();
+    return;
+  }
+
+  $(target).innerHTML = records.map(r => `
+    <div class="dash-item">
+      <strong>
+        ${esc(TYPES[r.type] || CATEGORIES[r.category])}
+      </strong>
+      <p>${esc(r.value)}
+        ${r.unit ? esc(r.unit) : ""}
+      </p>
+      ${r.notes ? `<p>${esc(r.notes)}</p>` : ""}
+      <div class="small">${esc(dateTime(r.createdAt))}</div>
+    </div>
+  `).join("");
+}
+
 function renderDashboard() {
-  const data = state.dashboardData;
-  if (!data) return;
+  const records = state.dashData?.records || [];
+  const summary = state.dashData?.summary || {};
 
-  const summary = data.summary || {};
-  const records = data.records || [];
+  updateControls();
 
-  updateDateControls();
+  $("dash-day").textContent = fullDate(state.dashDate);
+  $("dash-subtitle").textContent =
+    `${records.length} registros de ${PATIENTS[state.patient]}.`;
 
-  $("dashboard-day-title").textContent =
-    dateWithWeekday(state.dashboardDate);
+  const principais = summary.refeicoesRegistradas || 0;
+  const lanches = summary.lanches || 0;
 
-  $("dashboard-subtitle").textContent =
-    `${records.length} lançamento(s) registrado(s) neste dia.`;
-
-  const water = summary.agua?.totalMl || 0;
-  const meals = summary.refeicoesRegistradas || 0;
-  const meds = summary.medicacoes?.quantidade || 0;
-  const occurrences = summary.ocorrencias?.quantidade || 0;
-
-  $("metric-water").textContent = water;
-  $("metric-meals").textContent = `${meals}/3`;
-  $("metric-medications").textContent = meds;
-  $("metric-occurrences").textContent = occurrences;
-  $("meals-progress").style.width = `${meals / 3 * 100}%`;
+  $("metric-water").textContent = summary.agua?.totalMl || 0;
+  $("metric-meals").textContent = `${principais}/3`;
+  $("metric-snacks").textContent = lanches;
+  $("metric-meds").textContent =
+    summary.medicacoes?.quantidade || 0;
+  $("metric-events").textContent =
+    summary.ocorrencias?.quantidade || 0;
+  $("metric-total").textContent = records.length;
+  $("meal-progress").style.width =
+    `${principais / 3 * 100}%`;
 
   renderDashboardMeals(records);
   renderDashboardVitals(records);
   renderDashboardHygiene(records);
-  renderDashboardList("dash-medications", records,
-    ["medicacao"]);
-  renderDashboardList("dash-health-events", records,
-    ["consulta", "exame"]);
-  renderDashboardList("dash-occurrences", records,
-    ["ocorrencia"]);
+
+  dashboardItems(
+    "dash-medications",
+    filterRecords("medicacao", records)
+  );
+
+  dashboardItems(
+    "dash-health",
+    records.filter(r =>
+      r.category === "consulta" || r.category === "exame"
+    )
+  );
+
+  dashboardItems(
+    "dash-occurrences",
+    filterRecords("ocorrencia", records)
+  );
+
   renderTimeline(records);
 }
 
 function renderDashboardMeals(records) {
-  const html = Object.entries(MEALS).map(([type, label]) => {
-    const record = records.find(r =>
-      r.category === "alimentacao" &&
-      r.type === type
-    );
+  const meals = records.filter(r =>
+    r.category === "alimentacao"
+  );
+
+  let html = ["cafe", "almoco", "jantar"].map(type => {
+    const record = meals.find(r => r.type === type);
 
     return `
       <div class="dash-item">
-        <strong>${escapeHTML(label)}</strong>
+        <strong>${esc(MEALS[type])}</strong>
         <p>${record ?
-          escapeHTML(record.value) :
+          esc(record.value) :
           "Sem registro neste dia"}</p>
         ${record ? `
-          <div class="record-time">
-            ${escapeHTML(timeLabel(record.createdAt))}
+          <div class="small">
+            ${esc(timeLabel(record.createdAt))}
           </div>` : ""}
       </div>
     `;
   }).join("");
+
+  const snacks = meals.filter(r => r.type === "lanche");
+
+  html += `
+    <div class="dash-item">
+      <strong>Lanches (${snacks.length})</strong>
+      ${snacks.length ? snacks.map(r => `
+        <p>${esc(timeLabel(r.createdAt))} —
+          ${esc(r.value)}</p>
+      `).join("") : `<p>Sem registros.</p>`}
+    </div>
+  `;
 
   $("dash-meals").innerHTML = html;
 }
 
 function renderDashboardVitals(records) {
-  const items = ["pressao", "glicemia", "temperatura"];
+  const vitals = filterRecords("sinais_vitais", records);
 
-  $("dash-vitals").innerHTML = items.map(type => {
-    const matches = records
-      .filter(r =>
-        r.category === "sinais_vitais" &&
-        r.type === type
-      )
-      .sort((a, b) =>
-        String(b.createdAt).localeCompare(String(a.createdAt))
-      );
+  $("dash-vitals").innerHTML =
+    ["pressao", "glicemia", "temperatura"].map(type => {
+      const record = vitals.find(r => r.type === type);
 
-    const record = matches[0];
-
-    return `
-      <div class="dash-item">
-        <strong>${escapeHTML(TYPES[type])}</strong>
-        <p>${record ?
-          `${escapeHTML(record.value)} ${escapeHTML(record.unit)}` :
-          "Sem aferição registrada"}</p>
-        ${record ? `
-          <div class="record-time">
-            ${escapeHTML(
-              displayTimestamp(record.createdAt)
-            )}
-          </div>` : ""}
-      </div>
-    `;
-  }).join("");
+      return `
+        <div class="dash-item">
+          <strong>${esc(TYPES[type])}</strong>
+          <p>${record ?
+            `${esc(record.value)} ${esc(record.unit)}` :
+            "Sem aferição registrada"}</p>
+          ${record ? `
+            <div class="small">
+              ${esc(timeLabel(record.createdAt))}
+            </div>
+          ` : ""}
+        </div>
+      `;
+    }).join("");
 }
 
 function renderDashboardHygiene(records) {
-  const types = ["banho", "higiene_bucal", "urina", "evacuacao"];
+  const hygiene = filterRecords("higiene", records);
 
-  $("dash-hygiene").innerHTML = types.map(type => {
-    const matches = records.filter(r =>
-      r.category === "higiene" &&
-      r.type === type
-    );
+  $("dash-hygiene").innerHTML =
+    ["banho", "higiene_bucal", "urina", "evacuacao"]
+      .map(type => {
+        const filtered = hygiene.filter(r => r.type === type);
 
-    const count = matches.length;
-    const last = matches[count - 1];
-
-    return `
-      <div class="dash-item">
-        <strong>${escapeHTML(TYPES[type])}</strong>
-        <p>${count} registro(s)</p>
-        ${last ? `
-          <div class="record-time">
-            Último registro: ${escapeHTML(
-              timeLabel(last.createdAt)
-            )}
-          </div>` : ""}
-      </div>
-    `;
-  }).join("");
-}
-
-function renderDashboardList(target, records, categories) {
-  const matches = records
-    .filter(r => categories.includes(r.category))
-    .sort((a, b) =>
-      String(b.createdAt).localeCompare(String(a.createdAt))
-    );
-
-  if (!matches.length) {
-    $(target).innerHTML = emptyHTML();
-    return;
-  }
-
-  $(target).innerHTML = matches.map(r => `
-    <div class="dash-item">
-      <strong>
-        ${escapeHTML(CATEGORIES[r.category])}
-        · ${escapeHTML(timeLabel(r.createdAt))}
-      </strong>
-      <p>${escapeHTML(r.value)}</p>
-      ${r.notes ? `
-        <p>${escapeHTML(r.notes)}</p>
-      ` : ""}
-    </div>
-  `).join("");
+        return `
+          <div class="dash-item">
+            <strong>${esc(TYPES[type])}</strong>
+            <p>${filtered.length} registro(s)</p>
+            ${filtered.length ? `
+              <div class="small">
+                Último: ${esc(timeLabel(filtered[0].createdAt))}
+              </div>
+            ` : ""}
+          </div>
+        `;
+      }).join("");
 }
 
 function renderTimeline(records) {
@@ -834,167 +916,182 @@ function renderTimeline(records) {
     String(b.createdAt).localeCompare(String(a.createdAt))
   );
 
-  if (!sorted.length) {
-    $("dash-timeline").innerHTML = emptyHTML();
-    return;
-  }
-
-  $("dash-timeline").innerHTML = sorted.map(r => {
-    const label = TYPES[r.type] ||
-      CATEGORIES[r.category] || "Registro";
-
-    return `
-      <div class="timeline-item">
-        <div class="record-time">
-          ${escapeHTML(timeLabel(r.createdAt))}
-        </div>
-        <strong>${escapeHTML(label)}</strong>
-        <p>${escapeHTML(r.value)}
-          ${r.unit ? escapeHTML(r.unit) : ""}
+  $("dash-timeline").innerHTML = sorted.length
+    ? sorted.map(r => `
+      <div class="timeline">
+        <div class="small">${esc(timeLabel(r.createdAt))}</div>
+        <strong>
+          ${esc(TYPES[r.type] || CATEGORIES[r.category])}
+        </strong>
+        <p>${esc(r.value)}
+          ${r.unit ? esc(r.unit) : ""}
         </p>
       </div>
-    `;
-  }).join("");
+    `).join("")
+    : empty();
 }
 
-/* =====================================================
-   NAVEGACAO E ATUALIZACAO
-===================================================== */
+/* ===== NAVEGACAO ===== */
 
-function showScreen(name) {
-  state.screen = name;
+function showScreen(screen) {
+  state.screen = screen;
 
-  $("screen-care").hidden = name !== "care";
-  $("screen-dashboard").hidden = name !== "dashboard";
+  $("screen-care").hidden = screen !== "care";
+  $("screen-dash").hidden = screen !== "dash";
 
-  $("nav-care").classList.toggle("active", name === "care");
-  $("nav-dashboard").classList.toggle(
-    "active", name === "dashboard"
+  $("nav-care").classList.toggle(
+    "active", screen === "care"
+  );
+
+  $("nav-dash").classList.toggle(
+    "active", screen === "dash"
   );
 
   window.scrollTo(0, 0);
 }
 
 function changeCareDate(date) {
+  if (state.busy) return;
   state.careDate = date;
-  state.editingMeal = null;
   state.careData = null;
+  renderCare();
   loadCare();
 }
 
-function changeDashboardDate(date) {
-  state.dashboardDate = date;
-  state.dashboardData = null;
+function changeDashDate(date) {
+  if (state.busy) return;
+  state.dashDate = date;
+  state.dashData = null;
+  renderDashboard();
   loadDashboard();
 }
 
+function checkMidnight() {
+  const current = today();
+
+  if (current === state.lastDay) return;
+
+  const previousDay = state.lastDay;
+
+  if (state.careDate === previousDay) {
+    state.careDate = current;
+    state.careData = null;
+    renderCare();
+  }
+
+  if (state.dashDate === previousDay) {
+    state.dashDate = current;
+    state.dashData = null;
+  }
+
+  state.lastDay = current;
+
+  if (state.screen === "dash") {
+    renderDashboard();
+    loadDashboard(true);
+  } else {
+    loadCare(true);
+  }
+}
+
 function bindNavigation() {
+  $("patient-georges").addEventListener("click", () =>
+    selectPatient("GEORGES")
+  );
+
+  $("patient-ilma").addEventListener("click", () =>
+    selectPatient("ILMA")
+  );
+
   $("nav-care").addEventListener("click", () => {
-    if (state.screen === "dashboard") {
+    if (state.screen === "dash") {
       leaveDashboard();
     } else {
       showScreen("care");
     }
   });
 
-  $("nav-dashboard").addEventListener("click", () => {
-    if (state.screen === "dashboard") return;
-    openLogin();
+  $("nav-dash").addEventListener("click", () => {
+    if (state.screen !== "dash") openLogin();
   });
 
-  $("dashboard-lock").addEventListener("click", leaveDashboard);
+  $("dash-logout").addEventListener("click", leaveDashboard);
 
-  $("care-today").addEventListener("click", () => {
-    changeCareDate(today());
-  });
+  $("care-today").addEventListener("click", () =>
+    changeCareDate(today())
+  );
 
-  $("dashboard-today").addEventListener("click", () => {
-    changeDashboardDate(today());
-  });
+  $("dash-today").addEventListener("click", () =>
+    changeDashDate(today())
+  );
 
-  $("care-date").addEventListener("change", event => {
-    changeCareDate(event.target.value);
-  });
+  $("care-date").addEventListener("change", e =>
+    changeCareDate(e.target.value)
+  );
 
-  $("dashboard-date").addEventListener("change", event => {
-    changeDashboardDate(event.target.value);
-  });
+  $("dash-date").addEventListener("change", e =>
+    changeDashDate(e.target.value)
+  );
 
   $("login-cancel").addEventListener("click", closeLogin);
 
-  $("login-form").addEventListener("submit", event => {
-    event.preventDefault();
-    loginFamily($("family-password").value);
+  $("login-form").addEventListener("submit", e => {
+    e.preventDefault();
+    loginFamily();
   });
 
-  document.addEventListener("keydown", event => {
-    if (event.key === "Escape" && !$("login-modal").hidden) {
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && !$("login-modal").hidden) {
       closeLogin();
     }
   });
+
+  $("login-modal").addEventListener("click", e => {
+    if (e.target === $("login-modal")) closeLogin();
+  });
 }
 
-function handleMidnight() {
-  const current = today();
-
-  // Ao virar o dia, volta automaticamente ao dia atual
-  // caso a pessoa estivesse visualizando o dia anterior.
-  if (state.careDate !== current) {
-    const wasYesterday =
-      state.careDate === lastCheckedDay;
-
-    if (wasYesterday && state.screen === "care") {
-      changeCareDate(current);
-    }
-  }
-
-  if (
-    state.dashboardDate === lastCheckedDay &&
-    state.screen === "dashboard"
-  ) {
-    changeDashboardDate(current);
-  }
-
-  lastCheckedDay = current;
-}
-
-let lastCheckedDay = "";
+/* ===== INICIALIZACAO ===== */
 
 async function initialize() {
   state.careDate = today();
-  state.dashboardDate = today();
-  lastCheckedDay = today();
+  state.dashDate = today();
+  state.lastDay = today();
 
-  showScreen("care");
-  updateVitalInput();
-  bindCareForms();
+  bindForms();
   bindNavigation();
+  updateVitalFields();
+  applyPatient();
+  showScreen("care");
 
-  updateDateControls();
+  // Campos de alimentacao aparecem mesmo sem API.
+  renderCare();
+
+  $("connection-alert").hidden = Boolean(CONFIG.API_URL);
 
   await loadCare();
 
   setInterval(() => {
     if (document.hidden || state.busy) return;
 
-    handleMidnight();
+    checkMidnight();
 
-    if (state.screen === "care") {
-      loadCare(true);
-    } else if (state.screen === "dashboard") {
+    if (state.screen === "dash") {
       loadDashboard(true);
+    } else {
+      loadCare(true);
     }
   }, CONFIG.REFRESH_MS);
 
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) return;
 
-    handleMidnight();
+    checkMidnight();
 
-    if (state.screen === "care") {
-      loadCare(true);
-    } else if (state.familyToken) {
+    if (state.screen === "dash") {
       loadDashboard(true);
+    } else {
+      loadCare(true);
     }
   });
 }
