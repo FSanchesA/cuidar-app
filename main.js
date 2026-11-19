@@ -2,35 +2,30 @@
 "use strict";
 
 /*
-========================================================
  CUIDAR - MAIN.JS
- Versao 5.0 - Dashboard livre e comparativo
+ Versao 5.1 - Peso corporal
+ Georges e Ilma | GitHub Pages + Cloudflare + Apps Script
 
- GitHub Pages + Cloudflare Worker + Google Apps Script
+ Preserva:
+ - Dashboard comparativo sem senha
+ - Lancamentos separados por idoso
+ - Historico por data
+ - Rascunhos por pessoa e dia
+ - Atualizacao automatica em 60 segundos
+ - Refeicoes principais com registro unico
+ - Lanches ilimitados
+ - Agua, medicacoes, sinais vitais e higiene
+ - Consultas, exames e ocorrencias
 
- GEORGES: Verde
- ILMA: Rosa
-
- Dashboard:
- - Sem senha
- - Duas colunas simultaneas
- - Uma data compartilhada
- - Atualizacao automatica
-
- Lancamentos:
- - Individuais por idoso
- - Rascunhos separados por idoso e data
- - Protecao durante a digitacao
- - Bloqueio contra duplo envio
-========================================================
+ Acrescenta:
+ - Peso corporal em quilogramas
+ - Historico de pesagens na data selecionada
+ - Indicador e secao de peso no Dashboard
 */
 
 const CONFIG = {
-  API_URL:
-    "https://cuidar-api.fabricio-cbq.workers.dev/api",
-
+  API_URL: "https://cuidar-api.fabricio-cbq.workers.dev/api",
   TIMEZONE: "America/Sao_Paulo",
-
   REFRESH_MS: 60000
 };
 
@@ -48,17 +43,14 @@ const MEALS = {
   lanche: "Lanche"
 };
 
-const MAIN_MEALS = [
-  "cafe",
-  "almoco",
-  "jantar"
-];
+const MAIN_MEALS = ["cafe", "almoco", "jantar"];
 
 const TYPES = {
   ...MEALS,
   pressao: "Pressão arterial",
   glicemia: "Glicemia",
   temperatura: "Temperatura",
+  peso: "Peso corporal",
   banho: "Banho",
   higiene_bucal: "Higiene bucal",
   urina: "Urina",
@@ -78,35 +70,24 @@ const CATEGORIES = {
 
 const state = {
   patient: "GEORGES",
-
   screen: "care",
-
   careDate: "",
   dashDate: "",
-
   careData: null,
-
   dashboard: {
     GEORGES: null,
     ILMA: null
   },
-
   careDates: [],
   dashboardDates: [],
-
   drafts: {},
-
   busy: false,
-
   careRequest: 0,
   dashRequest: 0,
-
   lastDay: ""
 };
 
-/* =====================================================
-   1. UTILITARIOS
-===================================================== */
+/* UTILITARIOS */
 
 function esc(value) {
   return String(value ?? "")
@@ -126,39 +107,25 @@ function today() {
   }).formatToParts(new Date());
 
   const get = type =>
-    parts.find(part => part.type === type).value;
+    parts.find(p => p.type === type).value;
 
-  return (
-    get("year") + "-" +
-    get("month") + "-" +
-    get("day")
-  );
+  return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
 function dateLabel(value) {
   if (!value) return "";
-
   const [year, month, day] = value.split("-");
-
   return `${day}/${month}/${year}`;
 }
 
 function timeLabel(value) {
-  if (!value) return "";
-
-  return String(value).slice(11, 16);
+  return value ? String(value).slice(11, 16) : "";
 }
 
 function dateTime(value) {
   if (!value) return "";
-
-  const date = String(value).slice(0, 10);
-
-  return (
-    dateLabel(date) +
-    " às " +
-    timeLabel(value)
-  );
+  return dateLabel(String(value).slice(0, 10)) +
+    " às " + timeLabel(value);
 }
 
 function fullDate(value) {
@@ -182,7 +149,6 @@ function fullDate(value) {
 
 function notify(message, error = false) {
   const node = $("toast");
-
   if (!node) return;
 
   node.textContent = message;
@@ -190,7 +156,6 @@ function notify(message, error = false) {
   node.hidden = false;
 
   clearTimeout(notify.timer);
-
   notify.timer = setTimeout(() => {
     node.hidden = true;
   }, 3500);
@@ -212,92 +177,59 @@ function setBusy(value) {
 }
 
 function handleError(error) {
-  notify(
-    error?.message || "Erro inesperado.",
-    true
-  );
+  notify(error?.message || "Erro inesperado.", true);
 }
-
-/* =====================================================
-   2. API CLOUDFLARE
-===================================================== */
 
 async function api(action, payload = {}) {
   if (!CONFIG.API_URL) {
-    throw new Error(
-      "Integração com Google Sheets não configurada."
-    );
+    throw Error("Integração com Google Sheets não configurada.");
   }
 
   const response = await fetch(CONFIG.API_URL, {
     method: "POST",
-
     headers: {
       "Content-Type": "application/json"
     },
-
     cache: "no-store",
-
-    body: JSON.stringify({
-      action,
-      payload
-    })
+    body: JSON.stringify({ action, payload })
   });
 
   let result;
-
   try {
     result = await response.json();
   } catch {
-    throw new Error(
-      "O servidor retornou uma resposta inválida."
-    );
+    throw Error("O servidor retornou uma resposta inválida.");
   }
 
   if (!response.ok || !result.ok) {
-    throw new Error(
-      result.error ||
-      "Não foi possível concluir a operação."
+    throw Error(
+      result.error || "Não foi possível concluir a operação."
     );
   }
 
   return result;
 }
 
-/* =====================================================
-   3. RASCUNHOS POR IDOSO E DATA
-===================================================== */
+/* RASCUNHOS */
 
 function draftKey() {
-  return (
-    state.patient +
-    "|" +
-    state.careDate
-  );
+  return state.patient + "|" + state.careDate;
 }
 
 function drafts() {
   const key = draftKey();
-
-  if (!state.drafts[key]) {
-    state.drafts[key] = {};
-  }
-
+  if (!state.drafts[key]) state.drafts[key] = {};
   return state.drafts[key];
 }
 
 function captureDrafts() {
   const store = drafts();
 
-  $("screen-care")
-    .querySelectorAll(
-      "form input, form textarea, form select"
-    )
-    .forEach(field => {
-      if (field.id) {
-        store[field.id] = field.value;
-      }
-    });
+  $("screen-care").querySelectorAll(
+    "form input, form textarea, form select"
+  ).forEach(field => {
+    if (field.id) store[field.id] = field.value;
+  });
 }
 
 function restoreDrafts() {
@@ -305,7 +237,6 @@ function restoreDrafts() {
 
   Object.entries(store).forEach(([id, value]) => {
     const field = $(id);
-
     if (
       field &&
       $("screen-care").contains(field) &&
@@ -323,22 +254,16 @@ function clearFormDraft(form) {
 
   const store = drafts();
 
-  form.querySelectorAll(
-    "input,textarea"
-  ).forEach(field => {
+  form.querySelectorAll("input,textarea").forEach(field => {
     if (!field.id) return;
-
     delete store[field.id];
     field.value = "";
   });
 }
 
 function hasDraft() {
-  const store = drafts();
-
-  return Object.entries(store).some(([id, value]) => {
+  return Object.entries(drafts()).some(([id, value]) => {
     const field = $(id);
-
     return Boolean(
       field &&
       $("screen-care").contains(field) &&
@@ -350,7 +275,6 @@ function hasDraft() {
 
 function isTyping() {
   const active = document.activeElement;
-
   return Boolean(
     active &&
     $("screen-care").contains(active) &&
@@ -361,79 +285,44 @@ function isTyping() {
 function bindDrafts() {
   const screen = $("screen-care");
 
-  screen.addEventListener("input", event => {
-    const field = event.target;
-
-    if (
-      field.closest("form") &&
-      field.id
-    ) {
-      drafts()[field.id] = field.value;
-    }
-  });
-
-  screen.addEventListener("change", event => {
-    const field = event.target;
-
-    if (
-      field.closest("form") &&
-      field.id
-    ) {
-      drafts()[field.id] = field.value;
-    }
-  });
+  for (const eventType of ["input", "change"]) {
+    screen.addEventListener(eventType, event => {
+      const field = event.target;
+      if (field.closest("form") && field.id) {
+        drafts()[field.id] = field.value;
+      }
+    });
+  }
 }
 
-/* =====================================================
-   4. CONTROLE DAS DATAS
-===================================================== */
+/* CONTROLE DE DATAS */
 
-function availableDates(extraDates = []) {
+function availableDates(extra = []) {
   const current = today();
-
-  const dates = new Set(extraDates);
-
-  const [year, month, day] =
-    current.split("-").map(Number);
-
-  const base = new Date(
-    Date.UTC(year, month - 1, day, 12)
-  );
+  const dates = new Set(extra);
+  const [y, m, d] = current.split("-").map(Number);
+  const base = new Date(Date.UTC(y, m - 1, d, 12));
 
   for (let i = 0; i < 60; i++) {
     const date = new Date(base);
-
-    date.setUTCDate(
-      base.getUTCDate() - i
-    );
-
-    dates.add(
-      date.toISOString().slice(0, 10)
-    );
+    date.setUTCDate(base.getUTCDate() - i);
+    dates.add(date.toISOString().slice(0, 10));
   }
 
   dates.add(current);
 
   return [...dates]
-    .filter(date =>
-      /^\d{4}-\d{2}-\d{2}$/.test(date)
-    )
-    .filter(date =>
-      date <= current
-    )
+    .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d))
+    .filter(d => d <= current)
     .sort()
     .reverse();
 }
 
-function fillDate(id, selected, extraDates = []) {
+function fillDate(id, selected, extra = []) {
   const element = $(id);
+  const dates = availableDates(extra);
 
-  const dates = availableDates(extraDates);
-
-  if (
-    selected &&
-    !dates.includes(selected)
-  ) {
+  if (selected && !dates.includes(selected)) {
     dates.push(selected);
     dates.sort().reverse();
   }
@@ -441,16 +330,11 @@ function fillDate(id, selected, extraDates = []) {
   element.replaceChildren();
 
   dates.forEach(date => {
-    const option =
-      document.createElement("option");
-
+    const option = document.createElement("option");
     option.value = date;
-
-    option.textContent =
-      date === today()
-        ? "Hoje - " + dateLabel(date)
-        : dateLabel(date);
-
+    option.textContent = date === today()
+      ? "Hoje - " + dateLabel(date)
+      : dateLabel(date);
     element.appendChild(option);
   });
 
@@ -458,168 +342,126 @@ function fillDate(id, selected, extraDates = []) {
 }
 
 function updateDates() {
-  fillDate(
-    "care-date",
-    state.careDate,
-    state.careDates
-  );
-
-  fillDate(
-    "dash-date",
-    state.dashDate,
-    state.dashboardDates
-  );
+  fillDate("care-date", state.careDate, state.careDates);
+  fillDate("dash-date", state.dashDate, state.dashboardDates);
 
   $("care-tag").textContent =
-    state.careDate === today()
-      ? "Hoje"
-      : "Histórico";
+    state.careDate === today() ? "Hoje" : "Histórico";
 }
 
-/* =====================================================
-   5. TEMA VISUAL
-===================================================== */
+/* TEMA VISUAL */
 
 function applyTheme() {
-  const dashboard =
-    state.screen === "dash";
+  const dashboard = state.screen === "dash";
 
   document.body.classList.toggle(
-    "dashboard-mode",
-    dashboard
+    "dashboard-mode", dashboard
   );
 
   document.body.classList.toggle(
     "ilma",
-    !dashboard &&
-    state.patient === "ILMA"
+    !dashboard && state.patient === "ILMA"
   );
 
   document.body.classList.toggle(
     "georges",
-    !dashboard &&
-    state.patient === "GEORGES"
+    !dashboard && state.patient === "GEORGES"
   );
 
   $("patient-georges").classList.toggle(
-    "active",
-    state.patient === "GEORGES"
+    "active", state.patient === "GEORGES"
   );
 
   $("patient-ilma").classList.toggle(
-    "active",
-    state.patient === "ILMA"
+    "active", state.patient === "ILMA"
   );
 
   $("care-title").textContent =
-    "Cuidados de " +
-    PATIENTS[state.patient];
+    "Cuidados de " + PATIENTS[state.patient];
 
   document.title = dashboard
     ? "Cuidar | Dashboard da Família"
     : "Cuidar | " + PATIENTS[state.patient];
 }
 
-/* =====================================================
-   6. NAVEGACAO
-===================================================== */
+/* NAVEGACAO */
 
 function showScreen(screen) {
   state.screen = screen;
 
-  $("screen-care").hidden =
-    screen !== "care";
-
-  $("screen-dash").hidden =
-    screen !== "dash";
+  $("screen-care").hidden = screen !== "care";
+  $("screen-dash").hidden = screen !== "dash";
 
   $("nav-care").classList.toggle(
-    "active",
-    screen === "care"
+    "active", screen === "care"
   );
-
   $("nav-dash").classList.toggle(
-    "active",
-    screen === "dash"
+    "active", screen === "dash"
   );
 
   applyTheme();
-
   window.scrollTo(0, 0);
 }
 
 async function selectPatient(patient) {
-  if (state.busy) return;
-
-  if (
-    state.patient === patient
-  ) return;
+  if (state.busy || state.patient === patient) return;
 
   captureDrafts();
 
   state.patient = patient;
-
   state.careData = null;
   state.careDates = [];
-
   state.careRequest++;
 
   applyTheme();
-
   renderCare();
-
   await loadCare();
 }
 
 function openDashboard() {
-  if (state.screen === "dash") return;
-
-  if (state.busy) return;
+  if (state.screen === "dash" || state.busy) return;
 
   captureDrafts();
-
   state.dashDate = state.careDate;
 
   showScreen("dash");
-
   renderDashboard();
-
   loadDashboard();
 }
 
 function closeDashboard() {
   state.dashRequest++;
-
   showScreen("care");
-
   loadCare();
 }
 
-/* =====================================================
-   7. COMPONENTES DOS REGISTROS
-===================================================== */
+/* COMPONENTES DE REGISTROS */
 
-function empty(
-  message = "Nenhum registro neste dia."
-) {
-  return (
-    '<div class="empty">' +
-    esc(message) +
-    "</div>"
-  );
+function empty(message = "Nenhum registro neste dia.") {
+  return `<div class="empty">${esc(message)}</div>`;
 }
 
 function filterRecords(category, records) {
   return records
-    .filter(record =>
-      record.category === category
+    .filter(r => r.category === category)
+    .sort((a, b) =>
+      String(b.createdAt).localeCompare(String(a.createdAt))
+    );
+}
+
+function weightRecords(records) {
+  return records
+    .filter(r =>
+      r.category === "sinais_vitais" &&
+      r.type === "peso"
     )
     .sort((a, b) =>
-      String(b.createdAt)
-        .localeCompare(
-          String(a.createdAt)
-        )
+      String(b.createdAt).localeCompare(String(a.createdAt))
     );
+}
+
+function formatWeight(value) {
+  return String(value ?? "").replace(".", ",") + " kg";
 }
 
 function recordHTML(record) {
@@ -628,55 +470,35 @@ function recordHTML(record) {
     CATEGORIES[record.category] ||
     "Registro";
 
+  const unit = record.type === "peso"
+    ? "kg"
+    : record.unit || "";
+
   return `
     <div class="record">
-
       <div class="record-content">
-
-        <strong>
-          ${esc(name)}
-        </strong>
-
-        <p>
-          ${esc(record.value)}
-          ${record.unit ? esc(record.unit) : ""}
-        </p>
-
-        ${
-          record.notes
-            ? `<p>${esc(record.notes)}</p>`
-            : ""
-        }
-
+        <strong>${esc(name)}</strong>
+        <p>${esc(record.value)} ${esc(unit)}</p>
+        ${record.notes ? `<p>${esc(record.notes)}</p>` : ""}
         <div class="small">
-          Registrado em
-          ${esc(dateTime(record.createdAt))}
+          Registrado em ${esc(dateTime(record.createdAt))}
         </div>
-
       </div>
-
-      <button
-        type="button"
-        class="delete"
+      <button type="button" class="delete"
         data-delete="${esc(record.id)}"
         aria-label="Excluir registro"
-        title="Excluir registro"
-      >×</button>
-
+        title="Excluir registro">×</button>
     </div>
   `;
 }
 
 function renderList(id, records) {
-  $(id).innerHTML =
-    records.length
-      ? records.map(recordHTML).join("")
-      : empty();
+  $(id).innerHTML = records.length
+    ? records.map(recordHTML).join("")
+    : empty();
 }
 
-/* =====================================================
-   8. ALIMENTACAO
-===================================================== */
+/* ALIMENTACAO */
 
 function renderMeals() {
   const records = filterRecords(
@@ -684,228 +506,151 @@ function renderMeals() {
     state.careData?.records || []
   );
 
-  const mealCount =
-    MAIN_MEALS.filter(type =>
-      records.some(record =>
-        record.type === type
-      )
-    ).length;
+  const mealCount = MAIN_MEALS.filter(type =>
+    records.some(r => r.type === type)
+  ).length;
 
-  $("meal-counter").textContent =
-    mealCount + " de 3";
+  $("meal-counter").textContent = mealCount + " de 3";
 
-  const fixedMeals =
-    MAIN_MEALS.map(type => {
-      const record = records.find(
-        item => item.type === type
-      );
+  const fixedMeals = MAIN_MEALS.map(type => {
+    const record = records.find(r => r.type === type);
 
-      if (record) {
-        return `
-          <div class="meal">
-
-            <div class="meal-title">
-              ${esc(MEALS[type])}
-            </div>
-
-            <div class="meal-done">
-
-              <div class="done-title">
-                ✓ Refeição registrada
-              </div>
-
-              <p>
-                ${esc(record.value)}
-              </p>
-
-              <div class="small">
-                ${esc(dateTime(record.createdAt))}
-              </div>
-
-              <div class="actions">
-                <button
-                  type="button"
-                  class="delete"
-                  data-delete="${esc(record.id)}"
-                  aria-label="Excluir ${esc(MEALS[type])}"
-                >×</button>
-
-                <span class="small">
-                  Exclua o registro anterior
-                  para lançar novamente.
-                </span>
-              </div>
-
-            </div>
-
-          </div>
-        `;
-      }
-
+    if (record) {
       return `
         <div class="meal">
-
-          <form
-            class="meal-form"
-            data-meal="${type}"
-          >
-
-            <div class="meal-title">
-              ${esc(MEALS[type])}
+          <div class="meal-title">${esc(MEALS[type])}</div>
+          <div class="meal-done">
+            <div class="done-title">✓ Refeição registrada</div>
+            <p>${esc(record.value)}</p>
+            <div class="small">
+              ${esc(dateTime(record.createdAt))}
             </div>
-
-            <label for="meal-${type}">
-              O que foi ingerido?
-            </label>
-
-            <textarea
-              id="meal-${type}"
-              name="value"
-              maxlength="1000"
-              required
-              placeholder="Descreva os alimentos e bebidas"
-            ></textarea>
-
             <div class="actions">
-              <button
-                type="submit"
-                class="btn-primary"
-              >
-                Registrar ${esc(MEALS[type])}
-              </button>
+              <button type="button" class="delete"
+                data-delete="${esc(record.id)}"
+                aria-label="Excluir ${esc(MEALS[type])}">×</button>
+              <span class="small">
+                Exclua o registro anterior para lançar novamente.
+              </span>
             </div>
-
-          </form>
-
+          </div>
         </div>
       `;
-    }).join("");
+    }
 
-  const snacks = records.filter(
-    record => record.type === "lanche"
-  );
+    return `
+      <div class="meal">
+        <form class="meal-form" data-meal="${type}">
+          <div class="meal-title">${esc(MEALS[type])}</div>
+          <label for="meal-${type}">O que foi ingerido?</label>
+          <textarea id="meal-${type}" name="value"
+            maxlength="1000" required
+            placeholder="Descreva os alimentos e bebidas"></textarea>
+          <div class="actions">
+            <button type="submit" class="btn-primary">
+              Registrar ${esc(MEALS[type])}
+            </button>
+          </div>
+        </form>
+      </div>
+    `;
+  }).join("");
 
-  const snacksHTML = `
+  const snacks = records.filter(r => r.type === "lanche");
+
+  const snackHTML = `
     <div class="meal">
-
-      <form
-        class="meal-form"
-        data-meal="lanche"
-      >
-
-        <div class="meal-title">
-          Lanches
-        </div>
-
-        <label for="meal-lanche">
-          O que foi ingerido?
-        </label>
-
-        <textarea
-          id="meal-lanche"
-          name="value"
-          maxlength="1000"
-          required
-          placeholder="Ex.: Fruta, suco, biscoito..."
-        ></textarea>
-
+      <form class="meal-form" data-meal="lanche">
+        <div class="meal-title">Lanches</div>
+        <label for="meal-lanche">O que foi ingerido?</label>
+        <textarea id="meal-lanche" name="value"
+          maxlength="1000" required
+          placeholder="Ex.: Fruta, suco, biscoito..."></textarea>
         <div class="actions">
-          <button
-            type="submit"
-            class="btn-primary"
-          >
+          <button type="submit" class="btn-primary">
             + Registrar lanche
           </button>
         </div>
-
         <p class="subtitle">
           É possível registrar vários lanches durante o dia.
         </p>
-
       </form>
-
       <div class="section-label">
         Lanches registrados (${snacks.length})
       </div>
-
-      ${
-        snacks.length
-          ? snacks.map(recordHTML).join("")
-          : empty("Nenhum lanche registrado.")
-      }
-
+      ${snacks.length
+        ? snacks.map(recordHTML).join("")
+        : empty("Nenhum lanche registrado.")}
     </div>
   `;
 
-  $("meals-container").innerHTML =
-    fixedMeals + snacksHTML;
+  $("meals-container").innerHTML = fixedMeals + snackHTML;
 }
 
-/* =====================================================
-   9. RENDERIZAR LANCAMENTOS
-===================================================== */
+/* RENDERIZACAO DOS CUIDADOS */
 
 function renderCare() {
-  const records =
-    state.careData?.records || [];
-
-  const summary =
-    state.careData?.summary || {};
+  const records = state.careData?.records || [];
+  const summary = state.careData?.summary || {};
 
   updateDates();
-
   renderMeals();
 
-  $("water-total").textContent =
-    summary.agua?.totalMl || 0;
+  $("water-total").textContent = summary.agua?.totalMl || 0;
 
-  const sections = [
-    ["water-records", "agua"],
-    ["medication-records", "medicacao"],
-    ["vital-records", "sinais_vitais"],
-    ["hygiene-records", "higiene"],
-    ["consultation-records", "consulta"],
-    ["exam-records", "exame"],
-    ["occurrence-records", "ocorrencia"]
-  ];
+  const ordinaryVitals = records.filter(r =>
+    r.category === "sinais_vitais" && r.type !== "peso"
+  );
 
-  sections.forEach(([id, category]) => {
-    renderList(
-      id,
-      filterRecords(category, records)
-    );
-  });
+  const weights = weightRecords(records);
+
+  renderList("water-records",
+    filterRecords("agua", records));
+
+  renderList("medication-records",
+    filterRecords("medicacao", records));
+
+  renderList("vital-records", ordinaryVitals);
+  renderList("weight-records", weights);
+
+  renderList("hygiene-records",
+    filterRecords("higiene", records));
+
+  renderList("consultation-records",
+    filterRecords("consulta", records));
+
+  renderList("exam-records",
+    filterRecords("exame", records));
+
+  renderList("occurrence-records",
+    filterRecords("ocorrencia", records));
+
+  const currentWeight = weights[0];
+
+  $("weight-current").textContent = currentWeight
+    ? formatWeight(currentWeight.value)
+    : "Sem registro";
+
+  $("weight-current-date").textContent = currentWeight
+    ? "Registrado em " + dateTime(currentWeight.createdAt)
+    : "Nenhuma pesagem nesta data.";
 
   restoreDrafts();
 }
 
-/* =====================================================
-   10. CARREGAR CUIDADOS
-
- Protege campos durante digitacao.
-===================================================== */
+/* CONSULTAR CUIDADOS */
 
 async function loadCare(silent = false) {
-  if (state.busy || !CONFIG.API_URL) {
-    return;
-  }
+  if (state.busy || !CONFIG.API_URL) return;
 
-  if (
-    silent &&
-    (hasDraft() || isTyping())
-  ) {
-    return;
-  }
+  if (silent && (hasDraft() || isTyping())) return;
 
   const patient = state.patient;
   const date = state.careDate;
   const requestId = ++state.careRequest;
 
   try {
-    const data = await api("init", {
-      patient,
-      date
-    });
+    const data = await api("init", { patient, date });
 
     if (
       patient !== state.patient ||
@@ -914,42 +659,25 @@ async function loadCare(silent = false) {
     ) return;
 
     if (isTyping()) return;
-
-    if (
-      silent &&
-      hasDraft()
-    ) return;
+    if (silent && hasDraft()) return;
 
     captureDrafts();
 
     state.careData = data;
-
     state.careDates = data.dates || [];
-
     renderCare();
 
   } catch (error) {
-    if (!silent) {
-      handleError(error);
-    }
+    if (!silent) handleError(error);
   }
 }
-
-/* =====================================================
-   11. ATUALIZAR APOS SALVAR
-===================================================== */
 
 async function refreshCare() {
   const patient = state.patient;
   const date = state.careDate;
+  const requestId = ++state.careRequest;
 
-  const requestId =
-    ++state.careRequest;
-
-  const data = await api("init", {
-    patient,
-    date
-  });
+  const data = await api("init", { patient, date });
 
   if (
     patient !== state.patient ||
@@ -959,21 +687,16 @@ async function refreshCare() {
 
   state.careData = data;
   state.careDates = data.dates || [];
-
   renderCare();
 }
 
-/* =====================================================
-   12. SALVAR REGISTROS
-===================================================== */
+/* SALVAR REGISTROS */
 
 async function saveRecord(fields, form = null) {
   if (state.busy) return false;
 
   captureDrafts();
-
   setBusy(true);
-
   notify("Salvando registro...");
 
   let saved = false;
@@ -987,18 +710,14 @@ async function saveRecord(fields, form = null) {
 
     saved = true;
 
-    if (form) {
-      clearFormDraft(form);
-    }
+    if (form) clearFormDraft(form);
 
     try {
       await refreshCare();
-
       notify("Registro salvo com sucesso.");
-
-    } catch (refreshError) {
+    } catch {
       notify(
-        "Registro salvo. Não foi possível atualizar a tela; abra novamente os lançamentos.",
+        "Registro salvo. Não foi possível atualizar a tela.",
         true
       );
     }
@@ -1006,32 +725,23 @@ async function saveRecord(fields, form = null) {
     return true;
 
   } catch (error) {
-    if (!saved) {
-      handleError(error);
-    }
-
+    if (!saved) handleError(error);
     return false;
-
   } finally {
     setBusy(false);
   }
 }
 
-/* =====================================================
-   13. EXCLUIR REGISTROS
-===================================================== */
+/* EXCLUIR REGISTROS */
 
 async function deleteRecord(id) {
   if (state.busy) return;
 
-  const confirmed = window.confirm(
+  if (!window.confirm(
     "Tem certeza que deseja excluir este lançamento?"
-  );
-
-  if (!confirmed) return;
+  )) return;
 
   captureDrafts();
-
   setBusy(true);
 
   try {
@@ -1041,325 +751,222 @@ async function deleteRecord(id) {
     });
 
     await refreshCare();
-
     notify("Lançamento excluído.");
 
   } catch (error) {
     handleError(error);
-
   } finally {
     setBusy(false);
   }
 }
 
-/* =====================================================
-   14. SINAIS VITAIS
-===================================================== */
+/* SINAIS VITAIS */
 
-function updateVitalFields(
-  preserveValue = false
-) {
+function updateVitalFields(preserve = false) {
   const type = $("vital-type").value;
 
   const options = {
-    pressao: [
-      "Pressão arterial (mmHg)",
-      "Ex.: 120/80"
-    ],
-    glicemia: [
-      "Glicemia (mg/dL)",
-      "Ex.: 105"
-    ],
-    temperatura: [
-      "Temperatura (°C)",
-      "Ex.: 36,5"
-    ]
+    pressao: ["Pressão arterial (mmHg)", "Ex.: 120/80"],
+    glicemia: ["Glicemia (mg/dL)", "Ex.: 105"],
+    temperatura: ["Temperatura (°C)", "Ex.: 36,5"]
   };
 
   const input = $("vital-value");
 
-  $("vital-label").textContent =
-    options[type][0];
-
-  input.placeholder =
-    options[type][1];
+  $("vital-label").textContent = options[type][0];
+  input.placeholder = options[type][1];
 
   input.inputMode =
-    type === "pressao"
-      ? "text"
-      : "decimal";
+    type === "pressao" ? "text" : "decimal";
 
-  if (!preserveValue) {
+  if (!preserve) {
     input.value = "";
-
     delete drafts()["vital-value"];
   }
 }
 
-/* =====================================================
-   15. FORMULARIOS
-===================================================== */
+/* FORMULARIOS */
 
 function bindForms() {
+  $("meals-container").addEventListener("submit", async event => {
+    const form = event.target.closest(".meal-form");
+    if (!form) return;
 
-  // ALIMENTACAO
+    event.preventDefault();
+    if (state.busy) return;
 
-  $("meals-container").addEventListener(
-    "submit",
-    async event => {
-      const form =
-        event.target.closest(".meal-form");
+    const type = form.dataset.meal;
+    const value = form.querySelector(
+      'textarea[name="value"]'
+    ).value.trim();
 
-      if (!form) return;
-
-      event.preventDefault();
-
-      if (state.busy) return;
-
-      const type = form.dataset.meal;
-
-      const value = form.querySelector(
-        'textarea[name="value"]'
-      ).value.trim();
-
-      if (!value) {
-        notify(
-          "Descreva os alimentos ingeridos.",
-          true
-        );
-        return;
-      }
-
-      await saveRecord({
-        category: "alimentacao",
-        type,
-        value
-      }, form);
+    if (!value) {
+      notify("Descreva os alimentos ingeridos.", true);
+      return;
     }
-  );
 
-  // AGUA
+    await saveRecord({
+      category: "alimentacao",
+      type,
+      value
+    }, form);
+  });
 
-  $("water-value").addEventListener(
-    "input",
-    event => {
-      event.target.value =
-        event.target.value
-          .replace(/\D/g, "")
-          .slice(0, 3);
+  $("water-value").addEventListener("input", event => {
+    event.target.value = event.target.value
+      .replace(/\D/g, "")
+      .slice(0, 3);
 
-      drafts()["water-value"] =
-        event.target.value;
+    drafts()["water-value"] = event.target.value;
+  });
+
+  $("water-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    if (state.busy) return;
+
+    const value = $("water-value").value.trim();
+
+    if (!/^\d{1,3}$/.test(value) || Number(value) < 1) {
+      notify("Informe entre 1 e 999 mL.", true);
+      return;
     }
-  );
 
-  $("water-form").addEventListener(
-    "submit",
-    async event => {
-      event.preventDefault();
+    await saveRecord({
+      category: "agua",
+      type: "agua",
+      value: Number(value)
+    }, event.currentTarget);
+  });
 
-      if (state.busy) return;
+  $("medication-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    if (state.busy) return;
 
-      const value =
-        $("water-value").value.trim();
+    const value = $("medication-value").value.trim();
 
-      if (
-        !/^\d{1,3}$/.test(value) ||
-        Number(value) < 1
-      ) {
-        notify(
-          "Informe entre 1 e 999 mL.",
-          true
-        );
-        return;
-      }
-
-      await saveRecord({
-        category: "agua",
-        type: "agua",
-        value: Number(value)
-      }, event.currentTarget);
+    if (!value) {
+      notify("Informe a medicação administrada.", true);
+      return;
     }
-  );
 
-  // MEDICACOES
-
-  $("medication-form").addEventListener(
-    "submit",
-    async event => {
-      event.preventDefault();
-
-      if (state.busy) return;
-
-      const value =
-        $("medication-value").value.trim();
-
-      if (!value) {
-        notify(
-          "Informe a medicação administrada.",
-          true
-        );
-        return;
-      }
-
-      await saveRecord({
-        category: "medicacao",
-        type: "medicacao",
-        value
-      }, event.currentTarget);
-    }
-  );
-
-  // SINAIS VITAIS
+    await saveRecord({
+      category: "medicacao",
+      type: "medicacao",
+      value
+    }, event.currentTarget);
+  });
 
   $("vital-type").addEventListener(
-    "change",
-    () => updateVitalFields()
+    "change", () => updateVitalFields()
   );
 
-  $("vital-form").addEventListener(
-    "submit",
-    async event => {
-      event.preventDefault();
+  $("vital-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    if (state.busy) return;
 
-      if (state.busy) return;
+    const type = $("vital-type").value;
+    const value = $("vital-value").value.trim();
 
-      const type =
-        $("vital-type").value;
-
-      const value =
-        $("vital-value").value.trim();
-
-      if (
-        type === "pressao" &&
-        !/^\d{2,3}\s*\/\s*\d{2,3}$/.test(value)
-      ) {
-        notify(
-          "Informe a pressão no formato 120/80.",
-          true
-        );
-        return;
-      }
-
-      if (!value) {
-        notify(
-          "Informe o resultado da aferição.",
-          true
-        );
-        return;
-      }
-
-      await saveRecord({
-        category: "sinais_vitais",
-        type,
-        value
-      }, event.currentTarget);
+    if (
+      type === "pressao" &&
+      !/^\d{2,3}\s*\/\s*\d{2,3}$/.test(value)
+    ) {
+      notify("Informe a pressão no formato 120/80.", true);
+      return;
     }
-  );
 
-  // HIGIENE
-
-  $("hygiene-form").addEventListener(
-    "submit",
-    async event => {
-      event.preventDefault();
-
-      if (state.busy) return;
-
-      await saveRecord({
-        category: "higiene",
-        type: $("hygiene-type").value,
-        value: "Realizado",
-        notes: $("hygiene-note").value.trim()
-      }, event.currentTarget);
+    if (!value) {
+      notify("Informe o resultado da aferição.", true);
+      return;
     }
-  );
 
-  // CONSULTAS, EXAMES E OCORRENCIAS
+    await saveRecord({
+      category: "sinais_vitais",
+      type,
+      value
+    }, event.currentTarget);
+  });
+
+  /* NOVO: PESO CORPORAL */
+
+  $("weight-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    if (state.busy) return;
+
+    const text = $("weight-value").value.trim();
+    const normalized = text.replace(",", ".");
+    const weight = Number(normalized);
+
+    if (
+      !/^\d{1,3}(?:[.,]\d{1,2})?$/.test(text) ||
+      !Number.isFinite(weight) ||
+      weight <= 0 ||
+      weight > 500
+    ) {
+      notify("Informe um peso válido em kg. Ex.: 68,5.", true);
+      return;
+    }
+
+    await saveRecord({
+      category: "sinais_vitais",
+      type: "peso",
+      value: normalized
+    }, event.currentTarget);
+  });
+
+  $("hygiene-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    if (state.busy) return;
+
+    await saveRecord({
+      category: "higiene",
+      type: $("hygiene-type").value,
+      value: "Realizado",
+      notes: $("hygiene-note").value.trim()
+    }, event.currentTarget);
+  });
 
   const textForms = [
-    [
-      "consultation-form",
-      "consultation-value",
-      "consulta"
-    ],
-    [
-      "exam-form",
-      "exam-value",
-      "exame"
-    ],
-    [
-      "occurrence-form",
-      "occurrence-value",
-      "ocorrencia"
-    ]
+    ["consultation-form", "consultation-value", "consulta"],
+    ["exam-form", "exam-value", "exame"],
+    ["occurrence-form", "occurrence-value", "ocorrencia"]
   ];
 
-  textForms.forEach(
-    ([formId, fieldId, category]) => {
-      $(formId).addEventListener(
-        "submit",
-        async event => {
-          event.preventDefault();
+  textForms.forEach(([formId, fieldId, category]) => {
+    $(formId).addEventListener("submit", async event => {
+      event.preventDefault();
+      if (state.busy) return;
 
-          if (state.busy) return;
+      const value = $(fieldId).value.trim();
 
-          const value =
-            $(fieldId).value.trim();
-
-          if (!value) {
-            notify(
-              "Preencha a descrição.",
-              true
-            );
-            return;
-          }
-
-          await saveRecord({
-            category,
-            type: category,
-            value
-          }, event.currentTarget);
-        }
-      );
-    }
-  );
-
-  // EXCLUSAO
-
-  $("screen-care").addEventListener(
-    "click",
-    event => {
-      const button =
-        event.target.closest("[data-delete]");
-
-      if (button) {
-        deleteRecord(
-          button.dataset.delete
-        );
+      if (!value) {
+        notify("Preencha a descrição.", true);
+        return;
       }
-    }
-  );
+
+      await saveRecord({
+        category,
+        type: category,
+        value
+      }, event.currentTarget);
+    });
+  });
+
+  $("screen-care").addEventListener("click", event => {
+    const button = event.target.closest("[data-delete]");
+    if (button) deleteRecord(button.dataset.delete);
+  });
 }
 
-/* =====================================================
-   16. DASHBOARD LIVRE
-
- Consulta publica via acao "init".
- Nao utiliza senha nem token.
-===================================================== */
+/* DASHBOARD LIVRE */
 
 async function loadDashboard(silent = false) {
   if (!CONFIG.API_URL) return;
 
   const date = state.dashDate;
+  const requestId = ++state.dashRequest;
 
-  const requestId =
-    ++state.dashRequest;
-
-  if (!silent) {
-    $("dash-loading").hidden = false;
-  }
+  if (!silent) $("dash-loading").hidden = false;
 
   try {
     const [georges, ilma] = await Promise.all([
@@ -1367,7 +974,6 @@ async function loadDashboard(silent = false) {
         patient: "GEORGES",
         date
       }),
-
       api("init", {
         patient: "ILMA",
         date
@@ -1394,15 +1000,10 @@ async function loadDashboard(silent = false) {
 
   } catch (error) {
     if (!silent) {
-      $("summary-georges").textContent =
-        "Falha na atualização";
-
-      $("summary-ilma").textContent =
-        "Falha na atualização";
-
+      $("summary-georges").textContent = "Falha na atualização";
+      $("summary-ilma").textContent = "Falha na atualização";
       handleError(error);
     }
-
   } finally {
     if (requestId === state.dashRequest) {
       $("dash-loading").hidden = true;
@@ -1410,44 +1011,23 @@ async function loadDashboard(silent = false) {
   }
 }
 
-/* =====================================================
-   17. COMPONENTES DO DASHBOARD
-===================================================== */
+/* COMPONENTES DO DASHBOARD */
 
-function compMetric(
-  label,
-  value,
-  unit = "",
-  percent = null
-) {
-  const progress =
-    percent === null
-      ? ""
-      : `
-        <div class="comp-progress">
-          <div style="width:${
-            Math.max(0, Math.min(100, percent))
-          }%"></div>
-        </div>
-      `;
+function compMetric(label, value, unit = "", percent = null) {
+  const progress = percent === null
+    ? ""
+    : `
+      <div class="comp-progress">
+        <div style="width:${Math.max(0, Math.min(100, percent))}%"></div>
+      </div>
+    `;
 
   return `
     <div class="comp-metric">
-
-      <div class="comp-label">
-        ${esc(label)}
-      </div>
-
-      <div class="comp-value">
-        ${esc(value)}
-      </div>
-
-      <div class="comp-unit">
-        ${esc(unit)}
-      </div>
-
+      <div class="comp-label">${esc(label)}</div>
+      <div class="comp-value">${esc(value)}</div>
+      <div class="comp-unit">${esc(unit)}</div>
       ${progress}
-
     </div>
   `;
 }
@@ -1455,71 +1035,34 @@ function compMetric(
 function compSection(title, content) {
   return `
     <section class="comp-section">
-
-      <h3>
-        ${esc(title)}
-      </h3>
-
+      <h3>${esc(title)}</h3>
       ${content}
-
     </section>
   `;
 }
 
-function compRecord(
-  title,
-  value,
-  time = "",
-  notes = ""
-) {
+function compRecord(title, value, time = "", notes = "") {
   return `
     <div class="comp-record">
-
-      <strong>
-        ${esc(title)}
-      </strong>
-
-      <p>
-        ${esc(value)}
-      </p>
-
-      ${
-        notes
-          ? `<p>${esc(notes)}</p>`
-          : ""
-      }
-
-      ${
-        time
-          ? `<div class="small">${esc(time)}</div>`
-          : ""
-      }
-
+      <strong>${esc(title)}</strong>
+      <p>${esc(value)}</p>
+      ${notes ? `<p>${esc(notes)}</p>` : ""}
+      ${time ? `<div class="small">${esc(time)}</div>` : ""}
     </div>
   `;
 }
 
-function compEmpty(
-  message = "Sem registro neste dia"
-) {
-  return `
-    <div class="comp-empty">
-      ${esc(message)}
-    </div>
-  `;
+function compEmpty(message = "Sem registro neste dia") {
+  return `<div class="comp-empty">${esc(message)}</div>`;
 }
 
 function compList(records) {
-  if (!records.length) {
-    return compEmpty();
-  }
+  if (!records.length) return compEmpty();
 
   return records
     .slice()
     .sort((a, b) =>
-      String(b.createdAt).localeCompare(
-        String(a.createdAt)
-      )
+      String(b.createdAt).localeCompare(String(a.createdAt))
     )
     .map(record => {
       const title =
@@ -1527,10 +1070,14 @@ function compList(records) {
         CATEGORIES[record.category] ||
         "Registro";
 
+      const unit = record.type === "peso"
+        ? "kg"
+        : record.unit || "";
+
       return compRecord(
         title,
         String(record.value ?? "") +
-          (record.unit ? " " + record.unit : ""),
+          (unit ? " " + unit : ""),
         timeLabel(record.createdAt),
         record.notes || ""
       );
@@ -1538,77 +1085,57 @@ function compList(records) {
     .join("");
 }
 
-/* =====================================================
-   18. PAINEL INDIVIDUAL
-
- O mesmo formato e utilizado em ambas colunas.
-===================================================== */
+/* DASHBOARD INDIVIDUAL DENTRO DAS DUAS COLUNAS */
 
 function buildPatientDashboard(data) {
-  const records =
-    data.records || [];
+  const records = data.records || [];
 
-  const meals = filterRecords(
-    "alimentacao",
-    records
-  );
-
-  const water = filterRecords(
-    "agua",
-    records
-  );
-
-  const medications = filterRecords(
-    "medicacao",
-    records
-  );
+  const meals = filterRecords("alimentacao", records);
+  const water = filterRecords("agua", records);
+  const medications = filterRecords("medicacao", records);
 
   const vitals = filterRecords(
-    "sinais_vitais",
-    records
-  );
+    "sinais_vitais", records
+  ).filter(record => record.type !== "peso");
 
-  const hygiene = filterRecords(
-    "higiene",
-    records
-  );
+  const weights = weightRecords(records);
 
-  const occurrences = filterRecords(
-    "ocorrencia",
-    records
-  );
+  const hygiene = filterRecords("higiene", records);
+  const occurrences = filterRecords("ocorrencia", records);
 
-  const mealsCount =
-    MAIN_MEALS.filter(type =>
-      meals.some(record =>
-        record.type === type
-      )
-    ).length;
+  const mealsCount = MAIN_MEALS.filter(type =>
+    meals.some(record => record.type === type)
+  ).length;
 
-  const snacks = meals.filter(
-    record =>
-      record.type === "lanche"
-  );
+  const snacks = meals.filter(r => r.type === "lanche");
 
   const totalWater = water.reduce(
     (sum, record) =>
-      sum + (
-        Number(
-          String(record.value ?? "")
-            .replace(",", ".")
-        ) || 0
-      ),
+      sum + (Number(
+        String(record.value ?? "").replace(",", ".")
+      ) || 0),
     0
   );
 
   let html = "";
 
-  // INDICADORES
+  /* INDICADORES */
 
   html += compMetric(
     "Água ingerida",
     totalWater + " mL",
     "Volume registrado"
+  );
+
+  html += compMetric(
+    "Peso corporal",
+    weights.length
+      ? formatWeight(weights[0].value)
+      : "Sem registro",
+    weights.length
+      ? "Última pesagem na data: " +
+        dateTime(weights[0].createdAt)
+      : "Sem pesagem na data selecionada"
   );
 
   html += compMetric(
@@ -1654,58 +1181,47 @@ function buildPatientDashboard(data) {
     "Lançamentos"
   );
 
-  // ALIMENTACAO
+  /* ALIMENTACAO */
 
-  const mealsHTML =
-    MAIN_MEALS.map(type => {
-      const record = meals.find(
-        item =>
-          item.type === type
-      );
+  const mealsHTML = MAIN_MEALS.map(type => {
+    const record = meals.find(r => r.type === type);
 
-      return record
-        ? compRecord(
-            MEALS[type],
-            record.value,
-            timeLabel(record.createdAt)
-          )
-        : compRecord(
-            MEALS[type],
-            "Sem registro"
-          );
-    }).join("");
+    return record
+      ? compRecord(
+          MEALS[type],
+          record.value,
+          timeLabel(record.createdAt)
+        )
+      : compRecord(MEALS[type], "Sem registro");
+  }).join("");
 
-  const snacksHTML =
-    snacks.length
-      ? snacks.map(record =>
-          compRecord(
-            "Lanche",
-            record.value,
-            timeLabel(record.createdAt)
-          )
-        ).join("")
-      : compEmpty("Nenhum lanche registrado");
+  const snacksHTML = snacks.length
+    ? snacks.map(record =>
+        compRecord(
+          "Lanche",
+          record.value,
+          timeLabel(record.createdAt)
+        )
+      ).join("")
+    : compEmpty("Nenhum lanche registrado");
 
   html += compSection(
     "Alimentação",
     mealsHTML +
     `<div class="section-label">
-       Lanches (${snacks.length})
-     </div>` +
+      Lanches (${snacks.length})
+    </div>` +
     snacksHTML
   );
 
-  // SINAIS VITAIS
+  /* SINAIS VITAIS */
 
   const vitalHTML = [
     "pressao",
     "glicemia",
     "temperatura"
   ].map(type => {
-    const record = vitals.find(
-      item =>
-        item.type === type
-    );
+    const record = vitals.find(r => r.type === type);
 
     return record
       ? compRecord(
@@ -1714,18 +1230,21 @@ function buildPatientDashboard(data) {
             (record.unit ? " " + record.unit : ""),
           timeLabel(record.createdAt)
         )
-      : compRecord(
-          TYPES[type],
-          "Sem registro"
-        );
+      : compRecord(TYPES[type], "Sem registro");
   }).join("");
 
+  html += compSection("Sinais vitais", vitalHTML);
+
+  /* PESO CORPORAL */
+
   html += compSection(
-    "Sinais vitais",
-    vitalHTML
+    "Peso corporal",
+    weights.length
+      ? compList(weights)
+      : compEmpty("Nenhuma pesagem nesta data")
   );
 
-  // HIGIENE
+  /* HIGIENE */
 
   const hygieneHTML = [
     "banho",
@@ -1733,19 +1252,14 @@ function buildPatientDashboard(data) {
     "urina",
     "evacuacao"
   ].map(type => {
-    const matches =
-      hygiene.filter(record =>
-        record.type === type
-      );
-
+    const matches = hygiene.filter(r => r.type === type);
     const latest = matches[0];
 
     return compRecord(
       TYPES[type],
       matches.length + " registro(s)",
       latest
-        ? "Último: " +
-          timeLabel(latest.createdAt)
+        ? "Último: " + timeLabel(latest.createdAt)
         : ""
     );
   }).join("");
@@ -1755,19 +1269,18 @@ function buildPatientDashboard(data) {
     hygieneHTML
   );
 
-  // MEDICACOES
+  /* MEDICACOES */
 
   html += compSection(
     "Medicações",
     compList(medications)
   );
 
-  // CONSULTAS E EXAMES
+  /* CONSULTAS E EXAMES */
 
-  const healthEvents = records.filter(
-    record =>
-      record.category === "consulta" ||
-      record.category === "exame"
+  const healthEvents = records.filter(r =>
+    r.category === "consulta" ||
+    r.category === "exame"
   );
 
   html += compSection(
@@ -1775,52 +1288,46 @@ function buildPatientDashboard(data) {
     compList(healthEvents)
   );
 
-  // OCORRENCIAS
+  /* OCORRENCIAS */
 
   html += compSection(
     "Ocorrências",
     compList(occurrences)
   );
 
-  // LINHA DO TEMPO
+  /* LINHA DO TEMPO */
 
   const timeline = records
     .slice()
     .sort((a, b) =>
-      String(b.createdAt)
-        .localeCompare(
-          String(a.createdAt)
-        )
+      String(b.createdAt).localeCompare(String(a.createdAt))
     );
 
-  const timelineHTML =
-    timeline.length
-      ? timeline.map(record => {
-          const title =
-            TYPES[record.type] ||
-            CATEGORIES[record.category] ||
-            "Registro";
+  const timelineHTML = timeline.length
+    ? timeline.map(record => {
+        const title =
+          TYPES[record.type] ||
+          CATEGORIES[record.category] ||
+          "Registro";
 
-          return `
-            <div class="comp-timeline">
+        const unit = record.type === "peso"
+          ? "kg"
+          : record.unit || "";
 
-              <div class="small">
-                ${esc(timeLabel(record.createdAt))}
-              </div>
-
-              <strong>
-                ${esc(title)}
-              </strong>
-
-              <p>
-                ${esc(record.value)}
-                ${esc(record.unit || "")}
-              </p>
-
+        return `
+          <div class="comp-timeline">
+            <div class="small">
+              ${esc(timeLabel(record.createdAt))}
             </div>
-          `;
-        }).join("")
-      : compEmpty();
+            <strong>${esc(title)}</strong>
+            <p>
+              ${esc(record.value)}
+              ${esc(unit)}
+            </p>
+          </div>
+        `;
+      }).join("")
+    : compEmpty();
 
   html += compSection(
     "Linha do tempo",
@@ -1830,28 +1337,19 @@ function buildPatientDashboard(data) {
   return html;
 }
 
-/* =====================================================
-   19. RENDERIZAR DASHBOARD COMPARATIVO
-===================================================== */
+/* RENDERIZAR O DASHBOARD COMPARATIVO */
 
 function renderDashboard() {
   updateDates();
 
-  $("dash-day").textContent =
-    fullDate(state.dashDate);
+  $("dash-day").textContent = fullDate(state.dashDate);
 
-  const georges =
-    state.dashboard.GEORGES;
-
-  const ilma =
-    state.dashboard.ILMA;
+  const georges = state.dashboard.GEORGES;
+  const ilma = state.dashboard.ILMA;
 
   if (!georges || !ilma) {
-    $("summary-georges").textContent =
-      "Carregando registros...";
-
-    $("summary-ilma").textContent =
-      "Carregando registros...";
+    $("summary-georges").textContent = "Carregando registros...";
+    $("summary-ilma").textContent = "Carregando registros...";
 
     $("dashboard-georges").innerHTML = "";
     $("dashboard-ilma").innerHTML = "";
@@ -1862,19 +1360,14 @@ function renderDashboard() {
     return;
   }
 
-  const georgesRecords =
-    georges.records || [];
-
-  const ilmaRecords =
-    ilma.records || [];
+  const georgesRecords = georges.records || [];
+  const ilmaRecords = ilma.records || [];
 
   $("summary-georges").textContent =
-    georgesRecords.length +
-    " lançamento(s)";
+    georgesRecords.length + " lançamento(s)";
 
   $("summary-ilma").textContent =
-    ilmaRecords.length +
-    " lançamento(s)";
+    ilmaRecords.length + " lançamento(s)";
 
   $("dash-subtitle").textContent =
     "Georges e Ilma · " +
@@ -1888,9 +1381,7 @@ function renderDashboard() {
     buildPatientDashboard(ilma);
 }
 
-/* =====================================================
-   20. ALTERAR DATAS
-===================================================== */
+/* ALTERACAO DE DATAS */
 
 function changeCareDate(date) {
   if (state.busy) return;
@@ -1899,11 +1390,9 @@ function changeCareDate(date) {
 
   state.careDate = date;
   state.careData = null;
-
   state.careRequest++;
 
   renderCare();
-
   loadCare();
 }
 
@@ -1918,43 +1407,31 @@ function changeDashDate(date) {
   state.dashRequest++;
 
   renderDashboard();
-
   loadDashboard();
 }
 
-/* =====================================================
-   21. VIRADA DO DIA
-===================================================== */
+/* VIRADA DO DIA */
 
 function checkMidnight() {
   const current = today();
 
-  if (
-    current === state.lastDay
-  ) return;
+  if (current === state.lastDay) return;
 
   captureDrafts();
 
-  const previousDay =
-    state.lastDay;
+  const previousDay = state.lastDay;
 
-  if (
-    state.careDate === previousDay
-  ) {
+  if (state.careDate === previousDay) {
     state.careDate = current;
     state.careData = null;
-
     state.careRequest++;
   }
 
-  if (
-    state.dashDate === previousDay
-  ) {
+  if (state.dashDate === previousDay) {
     state.dashDate = current;
 
     state.dashboard.GEORGES = null;
     state.dashboard.ILMA = null;
-
     state.dashRequest++;
   }
 
@@ -1967,107 +1444,59 @@ function checkMidnight() {
   }
 }
 
-/* =====================================================
-   22. EVENTOS DE NAVEGACAO
-===================================================== */
+/* EVENTOS DE NAVEGACAO */
 
 function bindNavigation() {
-
-  // GEORGES
-
   $("patient-georges").addEventListener(
     "click",
     () => selectPatient("GEORGES")
   );
-
-  // ILMA
 
   $("patient-ilma").addEventListener(
     "click",
     () => selectPatient("ILMA")
   );
 
-  // LANCAMENTOS
-
-  $("nav-care").addEventListener(
-    "click",
-    () => {
-      if (
-        state.screen === "dash"
-      ) {
-        closeDashboard();
-      }
-    }
-  );
-
-  // DASHBOARD LIVRE
+  $("nav-care").addEventListener("click", () => {
+    if (state.screen === "dash") closeDashboard();
+  });
 
   $("nav-dash").addEventListener(
     "click",
     openDashboard
   );
 
-  // HOJE - LANCAMENTOS
-
   $("care-today").addEventListener(
     "click",
     () => changeCareDate(today())
   );
-
-  // HOJE - DASHBOARD
 
   $("dash-today").addEventListener(
     "click",
     () => changeDashDate(today())
   );
 
-  // DATA - LANCAMENTOS
-
   $("care-date").addEventListener(
     "change",
-    event => {
-      changeCareDate(
-        event.target.value
-      );
-    }
+    event => changeCareDate(event.target.value)
   );
-
-  // DATA - DASHBOARD
 
   $("dash-date").addEventListener(
     "change",
-    event => {
-      changeDashDate(
-        event.target.value
-      );
-    }
+    event => changeDashDate(event.target.value)
   );
 }
 
-/* =====================================================
-   23. ATUALIZACAO AUTOMATICA
-
- A cada 60 segundos.
- Nunca interrompe a digitacao.
-===================================================== */
+/* ATUALIZACAO AUTOMATICA */
 
 function refreshVisibleScreen() {
-  if (
-    document.hidden ||
-    state.busy
-  ) return;
+  if (document.hidden || state.busy) return;
 
   checkMidnight();
 
-  if (
-    state.screen === "dash"
-  ) {
+  if (state.screen === "dash") {
     loadDashboard(true);
-
-  } else if (
-    !hasDraft() &&
-    !isTyping()
-  ) {
+  } else if (!hasDraft() && !isTyping()) {
     loadCare(true);
   }
 }
@@ -2088,9 +1517,7 @@ function startAutoRefresh() {
   );
 }
 
-/* =====================================================
-   24. INICIALIZACAO
-===================================================== */
+/* INICIALIZACAO */
 
 async function initialize() {
   state.careDate = today();
